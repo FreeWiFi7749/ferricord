@@ -1,0 +1,15 @@
+[package]
+name = "ferricord-voice"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Voice connection support for Ferricord (Phase 3)"
+
+[dependencies]
+ferricord-core.workspace = true
+ferricord-model.workspace = true
+tokio.workspace = true
+tracing.workspace = true

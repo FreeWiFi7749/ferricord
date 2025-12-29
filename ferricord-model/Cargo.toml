@@ -1,0 +1,17 @@
+[package]
+name = "ferricord-model"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Discord API model definitions for Ferricord"
+
+[dependencies]
+ferricord-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_repr.workspace = true
+bitflags.workspace = true
+chrono.workspace = true
