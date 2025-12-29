@@ -153,7 +153,7 @@ impl Cache {
         if let Some(guild_id) = channel.guild_id {
             self.guild_channels
                 .entry(guild_id)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(channel_id);
         }
 
@@ -230,7 +230,7 @@ impl Cache {
 
         self.members
             .entry(guild_id)
-            .or_insert_with(DashMap::new)
+            .or_default()
             .insert(user_id, Arc::new(member));
     }
 
@@ -263,7 +263,7 @@ impl Cache {
         let role_id = role.id;
         self.roles
             .entry(guild_id)
-            .or_insert_with(DashMap::new)
+            .or_default()
             .insert(role_id, Arc::new(role));
     }
 

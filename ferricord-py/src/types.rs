@@ -1,9 +1,12 @@
 //! Common type definitions for Python bindings
 
+#![allow(dead_code)]
+
 use ferricord_model::{ChannelId, GuildId, MessageId, RoleId, UserId};
 use pyo3::prelude::*;
 
 /// Convert a Rust ID to a Python int.
+#[allow(deprecated)]
 pub fn id_to_py(py: Python<'_>, id: u64) -> PyObject {
     id.into_py(py)
 }

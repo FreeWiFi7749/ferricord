@@ -2,7 +2,7 @@
 
 use crate::channel::Channel;
 use crate::guild::Member;
-use crate::id::{ChannelId, CommandId, GuildId, InteractionId, MessageId, UserId};
+use crate::id::{ChannelId, CommandId, GuildId, InteractionId, UserId};
 use crate::message::{Attachment, Component, Embed, Message};
 use crate::permissions::Permissions;
 use crate::user::User;

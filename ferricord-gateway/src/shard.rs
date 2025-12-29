@@ -2,11 +2,10 @@
 //!
 //! This module handles individual shard connections to the Discord Gateway.
 
-use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::mpsc;
-use tokio::time::{interval, Instant};
+use tokio::time::Instant;
 use tracing::{debug, error, info, warn};
 
 use ferricord_core::{Error, Result};
@@ -248,7 +247,7 @@ impl Shard {
             }
             "MESSAGE_CREATE" => {
                 let message = serde_json::from_value(data)?;
-                GatewayEvent::MessageCreate(message)
+                GatewayEvent::MessageCreate(Box::new(message))
             }
             "MESSAGE_UPDATE" => {
                 let event = serde_json::from_value(data)?;
@@ -260,11 +259,11 @@ impl Shard {
             }
             "GUILD_CREATE" => {
                 let guild = serde_json::from_value(data)?;
-                GatewayEvent::GuildCreate(guild)
+                GatewayEvent::GuildCreate(Box::new(guild))
             }
             "GUILD_UPDATE" => {
                 let guild = serde_json::from_value(data)?;
-                GatewayEvent::GuildUpdate(guild)
+                GatewayEvent::GuildUpdate(Box::new(guild))
             }
             "GUILD_DELETE" => {
                 let guild = serde_json::from_value(data)?;
@@ -272,15 +271,15 @@ impl Shard {
             }
             "CHANNEL_CREATE" => {
                 let channel = serde_json::from_value(data)?;
-                GatewayEvent::ChannelCreate(channel)
+                GatewayEvent::ChannelCreate(Box::new(channel))
             }
             "CHANNEL_UPDATE" => {
                 let channel = serde_json::from_value(data)?;
-                GatewayEvent::ChannelUpdate(channel)
+                GatewayEvent::ChannelUpdate(Box::new(channel))
             }
             "CHANNEL_DELETE" => {
                 let channel = serde_json::from_value(data)?;
-                GatewayEvent::ChannelDelete(channel)
+                GatewayEvent::ChannelDelete(Box::new(channel))
             }
             "GUILD_MEMBER_ADD" => {
                 let event = serde_json::from_value(data)?;

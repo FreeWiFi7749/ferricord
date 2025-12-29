@@ -60,6 +60,7 @@ struct RouteBucket {
     /// Rate limit info for this bucket.
     info: RateLimitInfo,
     /// Semaphore for limiting concurrent requests to this bucket.
+    #[allow(dead_code)]
     semaphore: Arc<Semaphore>,
 }
 
@@ -90,6 +91,7 @@ struct GlobalState {
     /// When the global rate limit resets.
     reset_at: Instant,
     /// Remaining requests in the global limit.
+    #[allow(dead_code)]
     remaining: u32,
 }
 

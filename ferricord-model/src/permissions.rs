@@ -1,6 +1,6 @@
 //! Permission-related models
 
-use crate::id::{ChannelId, RoleId, UserId};
+use crate::id::{RoleId, UserId};
 use bitflags::bitflags;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 

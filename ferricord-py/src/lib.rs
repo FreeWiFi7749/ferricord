@@ -8,13 +8,14 @@ mod models;
 mod types;
 
 use pyo3::prelude::*;
+use pyo3::types::PyModule;
 
 /// Ferricord - A high-performance Discord API wrapper for Python.
 ///
 /// This module provides Python bindings for the Ferricord library,
 /// offering a discord.py-compatible API with Rust performance.
 #[pymodule]
-fn ferricord(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
+fn ferricord(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<client::Client>()?;
     m.add_class::<intents::Intents>()?;
     m.add_class::<models::PyUser>()?;

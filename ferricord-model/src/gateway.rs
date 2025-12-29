@@ -1,7 +1,7 @@
 //! Gateway-related models
 
 use crate::channel::Channel;
-use crate::guild::{Emoji, Guild, Member, PartialGuild, Role};
+use crate::guild::{Emoji, Guild, Member, Role};
 use crate::id::{ChannelId, GuildId, UserId};
 use crate::message::Message;
 use crate::user::{CurrentUser, User};
@@ -149,17 +149,17 @@ pub enum GatewayEvent {
     /// Failure response to Identify or Resume.
     InvalidSession(bool),
     /// New guild channel created.
-    ChannelCreate(Channel),
+    ChannelCreate(Box<Channel>),
     /// Channel was updated.
-    ChannelUpdate(Channel),
+    ChannelUpdate(Box<Channel>),
     /// Channel was deleted.
-    ChannelDelete(Channel),
+    ChannelDelete(Box<Channel>),
     /// Message was pinned or unpinned.
     ChannelPinsUpdate(ChannelPinsUpdateEvent),
     /// Thread created, also sent when being added to a private thread.
-    ThreadCreate(Channel),
+    ThreadCreate(Box<Channel>),
     /// Thread was updated.
-    ThreadUpdate(Channel),
+    ThreadUpdate(Box<Channel>),
     /// Thread was deleted.
     ThreadDelete(ThreadDeleteEvent),
     /// Sent when gaining access to a channel, contains all active threads.
@@ -169,9 +169,9 @@ pub enum GatewayEvent {
     /// Some user(s) were added to or removed from a thread.
     ThreadMembersUpdate(ThreadMembersUpdateEvent),
     /// Lazy-load for unavailable guild, guild became available, or user joined a new guild.
-    GuildCreate(Guild),
+    GuildCreate(Box<Guild>),
     /// Guild was updated.
-    GuildUpdate(Guild),
+    GuildUpdate(Box<Guild>),
     /// Guild became unavailable, or user left/was removed from a guild.
     GuildDelete(UnavailableGuild),
     /// A guild audit log entry was created.
@@ -221,7 +221,7 @@ pub enum GatewayEvent {
     /// Invite to a channel was deleted.
     InviteDelete(InviteDeleteEvent),
     /// Message was created.
-    MessageCreate(Message),
+    MessageCreate(Box<Message>),
     /// Message was edited.
     MessageUpdate(MessageUpdateEvent),
     /// Message was deleted.

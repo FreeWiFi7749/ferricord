@@ -67,11 +67,11 @@ impl HttpClient {
 
         loop {
             let mut request = match route.method {
-                Method::Get => self.client.get(&route.url()),
-                Method::Post => self.client.post(&route.url()),
-                Method::Put => self.client.put(&route.url()),
-                Method::Patch => self.client.patch(&route.url()),
-                Method::Delete => self.client.delete(&route.url()),
+                Method::Get => self.client.get(route.url()),
+                Method::Post => self.client.post(route.url()),
+                Method::Put => self.client.put(route.url()),
+                Method::Patch => self.client.patch(route.url()),
+                Method::Delete => self.client.delete(route.url()),
             };
 
             request = request
@@ -97,7 +97,7 @@ impl HttpClient {
                         .map_err(|e| Error::http(format!("Failed to read response: {}", e)))?;
 
                     if text.is_empty() {
-                        return serde_json::from_str("null").map_err(|e| Error::Json(e));
+                        return serde_json::from_str("null").map_err(Error::Json);
                     }
 
                     return serde_json::from_str(&text).map_err(|e| {

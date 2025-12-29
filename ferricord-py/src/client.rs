@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use pyo3::prelude::*;
+use pyo3::types::PyTuple;
 use tokio::sync::{mpsc, RwLock};
 use tracing::{error, info};
 
@@ -44,10 +45,12 @@ pub struct Client {
     /// Gateway intents.
     intents: Intents,
     /// Maximum messages to cache per channel.
+    #[allow(dead_code)]
     max_messages: usize,
     /// Event handlers.
     event_handlers: Arc<RwLock<HashMap<String, PyObject>>>,
     /// The HTTP client.
+    #[allow(dead_code)]
     http: Option<Arc<HttpClient>>,
     /// The cache.
     cache: Arc<Cache>,
@@ -88,15 +91,16 @@ impl Client {
     fn event(&self, py: Python<'_>, func: PyObject) -> PyResult<PyObject> {
         let func_name = func.getattr(py, "__name__")?.extract::<String>(py)?;
 
-        let event_name = if func_name.starts_with("on_") {
-            func_name[3..].to_string()
+        let event_name = if let Some(stripped) = func_name.strip_prefix("on_") {
+            stripped.to_string()
         } else {
             func_name.clone()
         };
 
         let handlers = self.event_handlers.clone();
-        pyo3_asyncio::tokio::get_runtime().block_on(async {
-            handlers.write().await.insert(event_name, func.clone());
+        let func_clone = func.clone_ref(py);
+        pyo3_async_runtimes::tokio::get_runtime().block_on(async {
+            handlers.write().await.insert(event_name, func_clone);
         });
 
         Ok(func)
@@ -115,7 +119,7 @@ impl Client {
         let running = self.running.clone();
 
         py.allow_threads(|| {
-            pyo3_asyncio::tokio::get_runtime().block_on(async move {
+            pyo3_async_runtimes::tokio::get_runtime().block_on(async move {
                 *running.write().await = true;
 
                 let http = match HttpClient::new(&token) {
@@ -170,13 +174,13 @@ impl Client {
     ///
     /// Args:
     ///     token: The bot token to use.
-    fn start<'py>(&mut self, py: Python<'py>, token: String) -> PyResult<&'py PyAny> {
+    fn start<'py>(&mut self, py: Python<'py>, token: String) -> PyResult<Bound<'py, PyAny>> {
         let intents = self.intents.inner();
         let event_handlers = self.event_handlers.clone();
         let cache = self.cache.clone();
         let running = self.running.clone();
 
-        pyo3_asyncio::tokio::future_into_py(py, async move {
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
             *running.write().await = true;
 
             let http = HttpClient::new(&token)
@@ -214,10 +218,10 @@ impl Client {
     }
 
     /// Close the client connection.
-    fn close<'py>(&self, py: Python<'py>) -> PyResult<&'py PyAny> {
+    fn close<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let running = self.running.clone();
 
-        pyo3_asyncio::tokio::future_into_py(py, async move {
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
             *running.write().await = false;
             Ok(())
         })
@@ -256,6 +260,7 @@ impl Client {
 }
 
 impl Client {
+    #[allow(deprecated)]
     async fn handle_event(
         handlers: &Arc<RwLock<HashMap<String, PyObject>>>,
         cache: &Arc<Cache>,
@@ -268,18 +273,18 @@ impl Client {
             }
             GatewayEvent::Resumed => ("resumed", vec![]),
             GatewayEvent::MessageCreate(message) => {
-                cache.insert_message(message.clone());
-                let py_message = PyMessage::new(message.clone());
+                cache.insert_message((**message).clone());
+                let py_message = PyMessage::new((**message).clone());
                 ("message", vec![py_message.into_py(py)])
             }
             GatewayEvent::GuildCreate(guild) => {
-                cache.insert_guild(guild.clone());
-                let py_guild = PyGuild::new(guild.clone());
+                cache.insert_guild((**guild).clone());
+                let py_guild = PyGuild::new((**guild).clone());
                 ("guild_join", vec![py_guild.into_py(py)])
             }
             GatewayEvent::GuildUpdate(guild) => {
-                cache.insert_guild(guild.clone());
-                let py_guild = PyGuild::new(guild.clone());
+                cache.insert_guild((**guild).clone());
+                let py_guild = PyGuild::new((**guild).clone());
                 ("guild_update", vec![py_guild.into_py(py)])
             }
             GatewayEvent::GuildDelete(unavailable) => {
@@ -287,18 +292,18 @@ impl Client {
                 ("guild_remove", vec![unavailable.id.get().into_py(py)])
             }
             GatewayEvent::ChannelCreate(channel) => {
-                cache.insert_channel(channel.clone());
-                let py_channel = PyChannel::new(channel.clone());
+                cache.insert_channel((**channel).clone());
+                let py_channel = PyChannel::new((**channel).clone());
                 ("channel_create", vec![py_channel.into_py(py)])
             }
             GatewayEvent::ChannelUpdate(channel) => {
-                cache.insert_channel(channel.clone());
-                let py_channel = PyChannel::new(channel.clone());
+                cache.insert_channel((**channel).clone());
+                let py_channel = PyChannel::new((**channel).clone());
                 ("channel_update", vec![py_channel.into_py(py)])
             }
             GatewayEvent::ChannelDelete(channel) => {
                 cache.remove_channel(channel.id);
-                let py_channel = PyChannel::new(channel.clone());
+                let py_channel = PyChannel::new((**channel).clone());
                 ("channel_delete", vec![py_channel.into_py(py)])
             }
             GatewayEvent::GuildMemberAdd(event) => {
@@ -333,12 +338,14 @@ impl Client {
                 let result = if args.is_empty() {
                     handler.call0(py)
                 } else {
-                    handler.call1(py, pyo3::types::PyTuple::new(py, &args))
+                    handler.call1(py, PyTuple::new(py, &args).unwrap())
                 };
 
                 match result {
                     Ok(coro) => {
-                        if let Ok(future) = pyo3_asyncio::tokio::into_future(coro.as_ref(py)) {
+                        if let Ok(future) =
+                            pyo3_async_runtimes::tokio::into_future(coro.bind(py).clone())
+                        {
                             tokio::spawn(async move {
                                 if let Err(e) = future.await {
                                     error!("Event handler error: {:?}", e);

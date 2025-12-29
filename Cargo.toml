@@ -41,8 +41,8 @@ serde_json = "1.0"
 serde_repr = "0.1"
 
 # Python bindings
-pyo3 = { version = "0.20", features = ["extension-module", "abi3-py311"] }
-pyo3-asyncio = { version = "0.20", features = ["tokio-runtime"] }
+pyo3 = { version = "0.23", features = ["extension-module", "abi3-py311"] }
+pyo3-async-runtimes = { version = "0.23", features = ["tokio-runtime"] }
 
 # Utilities
 bitflags = "2.4"
