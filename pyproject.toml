@@ -43,7 +43,6 @@ dev = [
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
-python-source = "python"
 module-name = "ferricord"
 manifest-path = "ferricord-py/Cargo.toml"
 
