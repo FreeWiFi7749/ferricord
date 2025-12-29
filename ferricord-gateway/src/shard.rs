@@ -4,6 +4,7 @@
 
 use std::time::Duration;
 
+use rand::Rng;
 use tokio::sync::mpsc;
 use tokio::time::Instant;
 use tracing::{debug, error, info, warn};
@@ -65,6 +66,7 @@ pub struct Shard {
     /// Session ID for resuming.
     session_id: Option<String>,
     /// Resume gateway URL.
+    /// TODO: Use this URL when implementing reconnection logic in Phase 2.
     resume_gateway_url: Option<String>,
     /// Last sequence number received.
     sequence: Option<u64>,
@@ -74,6 +76,8 @@ pub struct Shard {
     last_heartbeat: Option<Instant>,
     /// Whether we received a heartbeat ACK.
     heartbeat_ack: bool,
+    /// Whether the first heartbeat has been sent (for jitter calculation).
+    first_heartbeat_sent: bool,
     /// Event sender channel.
     event_tx: Option<mpsc::UnboundedSender<GatewayEvent>>,
 }
@@ -90,6 +94,7 @@ impl Shard {
             heartbeat_interval: None,
             last_heartbeat: None,
             heartbeat_ack: true,
+            first_heartbeat_sent: false,
             event_tx: None,
         }
     }
@@ -148,10 +153,22 @@ impl Shard {
     }
 
     /// Wait for the next heartbeat tick.
+    /// 
+    /// Per Discord docs, the first heartbeat should be sent after
+    /// `heartbeat_interval * jitter` where jitter is a random value between 0 and 1.
+    /// This prevents thundering herd problems when many bots connect simultaneously.
     async fn heartbeat_tick(&self) {
         if let Some(interval_ms) = self.heartbeat_interval {
-            tokio::time::sleep(Duration::from_millis(interval_ms)).await;
+            let wait_ms = if !self.first_heartbeat_sent {
+                // Apply jitter for the first heartbeat (0.0 to 1.0 multiplier)
+                let jitter = rand::thread_rng().gen::<f64>();
+                (interval_ms as f64 * jitter) as u64
+            } else {
+                interval_ms
+            };
+            tokio::time::sleep(Duration::from_millis(wait_ms)).await;
         } else {
+            // No heartbeat interval yet (Hello not received), wait longer
             tokio::time::sleep(Duration::from_secs(60)).await;
         }
     }
@@ -334,7 +351,8 @@ impl Shard {
 
     /// Send a heartbeat.
     async fn send_heartbeat(&mut self) -> Result<()> {
-        if !self.heartbeat_ack {
+        // Skip ACK check for the first heartbeat
+        if self.first_heartbeat_sent && !self.heartbeat_ack {
             warn!(
                 "Shard {} did not receive heartbeat ACK, reconnecting",
                 self.config.shard_id
@@ -344,6 +362,7 @@ impl Shard {
 
         self.heartbeat_ack = false;
         self.last_heartbeat = Some(Instant::now());
+        self.first_heartbeat_sent = true;
 
         let payload = GatewayPayload {
             op: GatewayOpcode::Heartbeat as u8,

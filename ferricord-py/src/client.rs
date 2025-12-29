@@ -356,7 +356,13 @@ impl Client {
                 let result = if args.is_empty() {
                     handler.call0(py)
                 } else {
-                    handler.call1(py, PyTuple::new(py, &args).unwrap())
+                    match PyTuple::new(py, &args) {
+                        Ok(tuple) => handler.call1(py, tuple),
+                        Err(e) => {
+                            error!("Failed to create PyTuple for event handler: {:?}", e);
+                            return;
+                        }
+                    }
                 };
 
                 match result {

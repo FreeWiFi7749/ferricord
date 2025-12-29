@@ -21,3 +21,4 @@ futures.workspace = true
 flate2.workspace = true
 url.workspace = true
 async-trait.workspace = true
+rand.workspace = true

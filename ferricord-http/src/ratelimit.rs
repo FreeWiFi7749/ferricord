@@ -130,17 +130,24 @@ impl RateLimiter {
     }
 
     /// Acquire permission to make a request to a specific route.
+    /// 
+    /// This method pessimistically decrements the remaining counter before making
+    /// a request to provide preemptive rate limiting. The actual remaining value
+    /// will be updated from response headers.
     pub async fn acquire(&self, route: &str) -> RateLimitGuard {
         self.check_global().await;
 
         let bucket_key = self.get_or_create_bucket(route);
 
+        // Use write lock to check and decrement remaining atomically
         let wait_duration = {
-            let buckets = self.buckets.read();
-            if let Some(bucket) = buckets.get(&bucket_key) {
+            let mut buckets = self.buckets.write();
+            if let Some(bucket) = buckets.get_mut(&bucket_key) {
                 if bucket.info.should_wait() {
                     Some(bucket.info.wait_duration())
                 } else {
+                    // Pessimistically decrement remaining before making request
+                    bucket.info.remaining = bucket.info.remaining.saturating_sub(1);
                     None
                 }
             } else {

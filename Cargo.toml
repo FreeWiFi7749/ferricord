@@ -44,6 +44,9 @@ serde_repr = "0.1"
 pyo3 = { version = "0.23", features = ["extension-module", "abi3-py311"] }
 pyo3-async-runtimes = { version = "0.23", features = ["tokio-runtime"] }
 
+# Random number generation
+rand = "0.8"
+
 # Utilities
 bitflags = "2.4"
 tracing = "0.1"
