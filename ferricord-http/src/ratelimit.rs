@@ -130,7 +130,7 @@ impl RateLimiter {
     }
 
     /// Acquire permission to make a request to a specific route.
-    /// 
+    ///
     /// This method pessimistically decrements the remaining counter before making
     /// a request to provide preemptive rate limiting. The actual remaining value
     /// will be updated from response headers.

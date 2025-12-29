@@ -153,7 +153,7 @@ impl Shard {
     }
 
     /// Wait for the next heartbeat tick.
-    /// 
+    ///
     /// Per Discord docs, the first heartbeat should be sent after
     /// `heartbeat_interval * jitter` where jitter is a random value between 0 and 1.
     /// This prevents thundering herd problems when many bots connect simultaneously.
