@@ -116,8 +116,13 @@ impl RateLimiter {
     pub async fn check_global(&self) {
         let wait_duration = {
             let global = self.global.read();
-            if global.limited && Instant::now() < global.reset_at {
-                Some(global.reset_at - Instant::now())
+            if global.limited {
+                let now = Instant::now();
+                if now < global.reset_at {
+                    Some(global.reset_at.saturating_duration_since(now))
+                } else {
+                    None
+                }
             } else {
                 None
             }

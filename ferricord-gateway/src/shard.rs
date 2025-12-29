@@ -45,6 +45,12 @@ impl ShardConfig {
 
     /// Set the shard ID and total shards.
     pub fn with_sharding(mut self, shard_id: u32, total_shards: u32) -> Self {
+        debug_assert!(
+            shard_id < total_shards,
+            "shard_id ({}) must be less than total_shards ({})",
+            shard_id,
+            total_shards
+        );
         self.shard_id = shard_id;
         self.total_shards = total_shards;
         self
@@ -161,7 +167,7 @@ impl Shard {
         if let Some(interval_ms) = self.heartbeat_interval {
             let wait_ms = if !self.first_heartbeat_sent {
                 // Apply jitter for the first heartbeat (0.0 to 1.0 multiplier)
-                let jitter = rand::thread_rng().gen::<f64>();
+                let jitter = rand::rng().random::<f64>();
                 (interval_ms as f64 * jitter) as u64
             } else {
                 interval_ms
@@ -240,7 +246,13 @@ impl Shard {
     /// Handle a dispatch event.
     async fn handle_dispatch(&mut self, payload: GatewayPayload) -> Result<()> {
         let event_name = payload.t.as_deref().unwrap_or("UNKNOWN");
-        let data = payload.d.unwrap_or_default();
+        let data = payload.d.unwrap_or_else(|| {
+            debug!(
+                "Shard {} dispatch event {} has no data",
+                self.config.shard_id, event_name
+            );
+            serde_json::Value::Null
+        });
 
         debug!(
             "Shard {} received event: {}",

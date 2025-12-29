@@ -28,7 +28,7 @@ ferricord-cache = { path = "ferricord-cache" }
 ferricord-voice = { path = "ferricord-voice" }
 
 # Async runtime
-tokio = { version = "1.35", features = ["full"] }
+tokio = { version = "1.43", features = ["full"] }
 tokio-tungstenite = { version = "0.21", features = ["native-tls"] }
 
 # HTTP
@@ -45,7 +45,7 @@ pyo3 = { version = "0.23", features = ["extension-module", "abi3-py311"] }
 pyo3-async-runtimes = { version = "0.23", features = ["tokio-runtime"] }
 
 # Random number generation
-rand = "0.8"
+rand = "0.9"
 
 # Utilities
 bitflags = "2.4"
@@ -63,6 +63,8 @@ chrono = { version = "0.4", features = ["serde"] }
 flate2 = "1.0"
 
 [profile.release]
-lto = true
-codegen-units = 1
+# Use thin LTO and parallel codegen for faster development iteration.
+# For production release, change to: lto = true, codegen-units = 1
+lto = "thin"
+codegen-units = 16
 opt-level = 3

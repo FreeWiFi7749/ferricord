@@ -8,12 +8,14 @@ use std::sync::Arc;
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 use tokio::sync::{mpsc, RwLock};
+use tokio::task::JoinHandle;
 use tracing::{error, info};
 
 use ferricord_cache::Cache;
 use ferricord_gateway::{Shard, ShardConfig};
 use ferricord_http::HttpClient;
 use ferricord_model::gateway::GatewayEvent;
+use ferricord_model::id::GuildId;
 
 use crate::intents::Intents;
 use crate::models::{PyChannel, PyGuild, PyMessage, PyUser};
@@ -44,18 +46,18 @@ use crate::models::{PyChannel, PyGuild, PyMessage, PyUser};
 pub struct Client {
     /// Gateway intents.
     intents: Intents,
-    /// Maximum messages to cache per channel.
-    #[allow(dead_code)]
-    max_messages: usize,
     /// Event handlers.
     event_handlers: Arc<RwLock<HashMap<String, PyObject>>>,
-    /// The HTTP client.
+    /// The HTTP client (reused across runs).
+    /// TODO: Use this field in Phase 2 for REST API operations (message sending, etc.)
     #[allow(dead_code)]
-    http: Option<Arc<HttpClient>>,
+    http: Arc<RwLock<Option<Arc<HttpClient>>>>,
     /// The cache.
     cache: Arc<Cache>,
     /// Whether the client is running.
     running: Arc<RwLock<bool>>,
+    /// Task handles for cleanup on close.
+    task_handles: Arc<RwLock<Vec<JoinHandle<()>>>>,
 }
 
 #[pymethods]
@@ -64,19 +66,18 @@ impl Client {
     ///
     /// Args:
     ///     intents: Gateway intents to use.
-    ///     max_messages: Maximum messages to cache per channel (default: 1000).
     #[new]
-    #[pyo3(signature = (intents=None, max_messages=1000))]
-    fn new(intents: Option<Intents>, max_messages: usize) -> Self {
+    #[pyo3(signature = (intents=None))]
+    fn new(intents: Option<Intents>) -> Self {
         let intents = intents.unwrap_or_else(Intents::default_intents);
 
         Self {
             intents,
-            max_messages,
             event_handlers: Arc::new(RwLock::new(HashMap::new())),
-            http: None,
+            http: Arc::new(RwLock::new(None)),
             cache: Arc::new(Cache::new()),
             running: Arc::new(RwLock::new(false)),
+            task_handles: Arc::new(RwLock::new(Vec::new())),
         }
     }
 
@@ -197,6 +198,7 @@ impl Client {
         let event_handlers = self.event_handlers.clone();
         let cache = self.cache.clone();
         let running = self.running.clone();
+        let task_handles = self.task_handles.clone();
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             *running.write().await = true;
@@ -217,13 +219,13 @@ impl Client {
 
             let (event_tx, mut event_rx) = mpsc::unbounded_channel::<GatewayEvent>();
 
-            tokio::spawn(async move {
+            let shard_handle = tokio::spawn(async move {
                 if let Err(e) = shard.run(&gateway_info.url, event_tx).await {
                     error!("Shard error: {}", e);
                 }
             });
 
-            tokio::spawn(async move {
+            let event_handle = tokio::spawn(async move {
                 while *running.read().await {
                     if let Some(event) = event_rx.recv().await {
                         Self::handle_event(&event_handlers, &cache, event).await;
@@ -231,16 +233,39 @@ impl Client {
                 }
             });
 
+            // Store handles for cleanup on close()
+            let mut handles = task_handles.write().await;
+            handles.push(shard_handle);
+            handles.push(event_handle);
+
             Ok(())
         })
     }
 
     /// Close the client connection.
+    ///
+    /// This will stop all running tasks and clean up resources.
     fn close<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let running = self.running.clone();
+        let task_handles = self.task_handles.clone();
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            // Signal tasks to stop
             *running.write().await = false;
+
+            // Take ownership of handles and abort them
+            let handles: Vec<JoinHandle<()>> = {
+                let mut guard = task_handles.write().await;
+                std::mem::take(&mut *guard)
+            };
+
+            // Abort and await all tasks
+            for handle in handles {
+                handle.abort();
+                // Ignore JoinError from abort
+                let _ = handle.await;
+            }
+
             Ok(())
         })
     }
@@ -252,6 +277,9 @@ impl Client {
     }
 
     /// Get all guilds the bot is in.
+    ///
+    /// Note: This clones all guilds which can be expensive for large bots.
+    /// Consider using `guild_ids()` for lightweight access.
     #[getter]
     fn guilds(&self) -> Vec<PyGuild> {
         self.cache
@@ -259,6 +287,31 @@ impl Client {
             .into_iter()
             .map(|g| PyGuild::new((*g).clone()))
             .collect()
+    }
+
+    /// Get all guild IDs (lightweight).
+    ///
+    /// This is more efficient than `guilds` for large bots as it doesn't
+    /// clone the full guild objects.
+    fn guild_ids(&self) -> Vec<u64> {
+        self.cache
+            .guilds()
+            .into_iter()
+            .map(|g| g.id.get())
+            .collect()
+    }
+
+    /// Get a specific guild by ID.
+    ///
+    /// Args:
+    ///     guild_id: The ID of the guild to get.
+    ///
+    /// Returns:
+    ///     The guild if found, None otherwise.
+    fn get_guild(&self, guild_id: u64) -> Option<PyGuild> {
+        self.cache
+            .guild(GuildId::new(guild_id))
+            .map(|g| PyGuild::new((*g).clone()))
     }
 
     /// Get the number of guilds.
