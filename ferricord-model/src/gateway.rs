@@ -217,7 +217,7 @@ pub enum GatewayEvent {
     /// Guild integration was deleted.
     IntegrationDelete(serde_json::Value),
     /// Invite to a channel was created.
-    InviteCreate(InviteCreateEvent),
+    InviteCreate(Box<InviteCreateEvent>),
     /// Invite to a channel was deleted.
     InviteDelete(InviteDeleteEvent),
     /// Message was created.
@@ -229,7 +229,7 @@ pub enum GatewayEvent {
     /// Multiple messages were deleted at once.
     MessageDeleteBulk(MessageDeleteBulkEvent),
     /// User reacted to a message.
-    MessageReactionAdd(MessageReactionAddEvent),
+    MessageReactionAdd(Box<MessageReactionAddEvent>),
     /// User removed a reaction from a message.
     MessageReactionRemove(MessageReactionRemoveEvent),
     /// All reactions were explicitly removed from a message.
