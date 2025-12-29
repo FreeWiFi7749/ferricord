@@ -1,13 +1,13 @@
 //! Interaction-related models
 
+use crate::channel::Channel;
+use crate::guild::Member;
+use crate::id::{ChannelId, CommandId, GuildId, InteractionId, MessageId, UserId};
+use crate::message::{Attachment, Component, Embed, Message};
+use crate::permissions::Permissions;
+use crate::user::User;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use crate::id::{ChannelId, GuildId, InteractionId, MessageId, UserId, CommandId};
-use crate::user::User;
-use crate::guild::Member;
-use crate::message::{Message, Component, Embed, Attachment};
-use crate::channel::Channel;
-use crate::permissions::Permissions;
 
 /// Represents an interaction from a user.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -67,7 +67,9 @@ pub struct Interaction {
 impl Interaction {
     /// Returns the user who invoked this interaction.
     pub fn user(&self) -> Option<&User> {
-        self.user.as_ref().or_else(|| self.member.as_ref().and_then(|m| m.user.as_ref()))
+        self.user
+            .as_ref()
+            .or_else(|| self.member.as_ref().and_then(|m| m.user.as_ref()))
     }
 
     /// Returns the user ID of who invoked this interaction.

@@ -122,10 +122,7 @@ impl Error {
     pub fn is_retryable(&self) -> bool {
         matches!(
             self,
-            Self::RateLimited { .. }
-                | Self::WebSocket(_)
-                | Self::Gateway(_)
-                | Self::Http(_)
+            Self::RateLimited { .. } | Self::WebSocket(_) | Self::Gateway(_) | Self::Http(_)
         )
     }
 }

@@ -2,8 +2,8 @@
 //!
 //! This module provides Python-accessible wrappers for Discord models.
 
+use ferricord_model::{Channel, Guild, Member, Message, Role, User};
 use pyo3::prelude::*;
-use ferricord_model::{User, Message, Guild, Channel, Member, Role};
 
 /// Python wrapper for User.
 #[pyclass(name = "User")]
@@ -88,7 +88,10 @@ impl PyUser {
     }
 
     fn __repr__(&self) -> String {
-        format!("<User id={} username='{}'>", self.inner.id, self.inner.username)
+        format!(
+            "<User id={} username='{}'>",
+            self.inner.id, self.inner.username
+        )
     }
 
     fn __str__(&self) -> String {
@@ -388,7 +391,10 @@ impl PyChannel {
     }
 
     fn __str__(&self) -> String {
-        self.inner.name.clone().unwrap_or_else(|| format!("Channel {}", self.inner.id))
+        self.inner
+            .name
+            .clone()
+            .unwrap_or_else(|| format!("Channel {}", self.inner.id))
     }
 }
 
@@ -465,7 +471,12 @@ impl PyMember {
     }
 
     fn __repr__(&self) -> String {
-        let name = self.inner.user.as_ref().map(|u| u.username.as_str()).unwrap_or("Unknown");
+        let name = self
+            .inner
+            .user
+            .as_ref()
+            .map(|u| u.username.as_str())
+            .unwrap_or("Unknown");
         format!("<Member name='{}'>", name)
     }
 }

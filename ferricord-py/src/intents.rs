@@ -1,7 +1,7 @@
 //! Gateway Intents for Python
 
-use pyo3::prelude::*;
 use ferricord_model::gateway::Intents as RustIntents;
+use pyo3::prelude::*;
 
 /// Gateway intents for filtering events.
 ///
@@ -326,15 +326,18 @@ impl Intents {
     /// Whether AUTO_MODERATION_CONFIGURATION intent is enabled.
     #[getter]
     fn auto_moderation_configuration(&self) -> bool {
-        self.inner.contains(RustIntents::AUTO_MODERATION_CONFIGURATION)
+        self.inner
+            .contains(RustIntents::AUTO_MODERATION_CONFIGURATION)
     }
 
     #[setter]
     fn set_auto_moderation_configuration(&mut self, value: bool) {
         if value {
-            self.inner.insert(RustIntents::AUTO_MODERATION_CONFIGURATION);
+            self.inner
+                .insert(RustIntents::AUTO_MODERATION_CONFIGURATION);
         } else {
-            self.inner.remove(RustIntents::AUTO_MODERATION_CONFIGURATION);
+            self.inner
+                .remove(RustIntents::AUTO_MODERATION_CONFIGURATION);
         }
     }
 
@@ -376,9 +379,7 @@ impl Intents {
     }
 
     fn __invert__(&self) -> Intents {
-        Intents {
-            inner: !self.inner,
-        }
+        Intents { inner: !self.inner }
     }
 }
 

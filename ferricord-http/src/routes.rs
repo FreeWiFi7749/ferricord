@@ -478,8 +478,14 @@ pub mod commands {
     pub fn get_guild(application_id: UserId, guild_id: GuildId) -> Route {
         Route::new(
             Method::Get,
-            format!("/applications/{}/guilds/{}/commands", application_id, guild_id),
-            format!("applications:{}:guilds:{}:commands", application_id, guild_id),
+            format!(
+                "/applications/{}/guilds/{}/commands",
+                application_id, guild_id
+            ),
+            format!(
+                "applications:{}:guilds:{}:commands",
+                application_id, guild_id
+            ),
         )
     }
 
@@ -487,8 +493,14 @@ pub mod commands {
     pub fn create_guild(application_id: UserId, guild_id: GuildId) -> Route {
         Route::new(
             Method::Post,
-            format!("/applications/{}/guilds/{}/commands", application_id, guild_id),
-            format!("applications:{}:guilds:{}:commands", application_id, guild_id),
+            format!(
+                "/applications/{}/guilds/{}/commands",
+                application_id, guild_id
+            ),
+            format!(
+                "applications:{}:guilds:{}:commands",
+                application_id, guild_id
+            ),
         )
     }
 
@@ -496,8 +508,14 @@ pub mod commands {
     pub fn bulk_overwrite_guild(application_id: UserId, guild_id: GuildId) -> Route {
         Route::new(
             Method::Put,
-            format!("/applications/{}/guilds/{}/commands", application_id, guild_id),
-            format!("applications:{}:guilds:{}:commands", application_id, guild_id),
+            format!(
+                "/applications/{}/guilds/{}/commands",
+                application_id, guild_id
+            ),
+            format!(
+                "applications:{}:guilds:{}:commands",
+                application_id, guild_id
+            ),
         )
     }
 }

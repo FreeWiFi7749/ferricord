@@ -163,9 +163,8 @@ impl Shard {
             self.sequence = Some(seq);
         }
 
-        let opcode = GatewayOpcode::try_from(payload.op).map_err(|op| {
-            Error::gateway(format!("Unknown opcode: {}", op))
-        })?;
+        let opcode = GatewayOpcode::try_from(payload.op)
+            .map_err(|op| Error::gateway(format!("Unknown opcode: {}", op)))?;
 
         match opcode {
             GatewayOpcode::Dispatch => {
@@ -186,7 +185,7 @@ impl Shard {
                     self.config.shard_id, resumable
                 );
                 self.emit_event(GatewayEvent::InvalidSession(resumable));
-                
+
                 if !resumable {
                     self.session_id = None;
                     self.sequence = None;
@@ -200,7 +199,7 @@ impl Shard {
                 );
                 self.heartbeat_interval = Some(hello.heartbeat_interval);
                 self.emit_event(GatewayEvent::Hello(hello));
-                
+
                 if self.session_id.is_some() {
                     self.send_resume().await?;
                 } else {
@@ -227,7 +226,10 @@ impl Shard {
         let event_name = payload.t.as_deref().unwrap_or("UNKNOWN");
         let data = payload.d.unwrap_or_default();
 
-        debug!("Shard {} received event: {}", self.config.shard_id, event_name);
+        debug!(
+            "Shard {} received event: {}",
+            self.config.shard_id, event_name
+        );
 
         let event = match event_name {
             "READY" => {
@@ -292,9 +294,7 @@ impl Shard {
                 let event = serde_json::from_value(data)?;
                 GatewayEvent::GuildMemberUpdate(event)
             }
-            "INTERACTION_CREATE" => {
-                GatewayEvent::InteractionCreate(data)
-            }
+            "INTERACTION_CREATE" => GatewayEvent::InteractionCreate(data),
             "TYPING_START" => {
                 let event = serde_json::from_value(data)?;
                 GatewayEvent::TypingStart(event)
@@ -312,7 +312,10 @@ impl Shard {
                 GatewayEvent::PresenceUpdate(event)
             }
             _ => {
-                debug!("Shard {} unhandled event: {}", self.config.shard_id, event_name);
+                debug!(
+                    "Shard {} unhandled event: {}",
+                    self.config.shard_id, event_name
+                );
                 GatewayEvent::Unknown(event_name.to_string(), data)
             }
         };
@@ -381,9 +384,10 @@ impl Shard {
 
     /// Send a resume payload.
     async fn send_resume(&self) -> Result<()> {
-        let session_id = self.session_id.as_ref().ok_or_else(|| {
-            Error::gateway("No session ID for resume")
-        })?;
+        let session_id = self
+            .session_id
+            .as_ref()
+            .ok_or_else(|| Error::gateway("No session ID for resume"))?;
 
         info!(
             "Shard {} sending resume, session_id: {}",

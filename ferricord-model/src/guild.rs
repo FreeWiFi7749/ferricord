@@ -1,10 +1,10 @@
 //! Guild (server) related models
 
+use crate::id::{ChannelId, EmojiId, GuildId, RoleId, UserId};
+use crate::permissions::Permissions;
+use crate::user::User;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use crate::id::{ChannelId, EmojiId, GuildId, RoleId, UserId};
-use crate::user::User;
-use crate::permissions::Permissions;
 
 /// Represents a Discord guild (server).
 #[derive(Clone, Debug, Deserialize, Serialize)]

@@ -3,14 +3,14 @@
 //! This module provides traits and utilities for handling Gateway events.
 
 use async_trait::async_trait;
-use ferricord_model::gateway::{
-    GatewayEvent, ReadyEvent, MessageDeleteEvent, MessageUpdateEvent,
-    GuildMemberAddEvent, GuildMemberRemoveEvent, GuildMemberUpdateEvent,
-    TypingStartEvent, PresenceUpdateEvent, VoiceServerUpdateEvent,
-};
-use ferricord_model::{Message, Guild, Channel};
 use ferricord_model::gateway::UnavailableGuild;
+use ferricord_model::gateway::{
+    GatewayEvent, GuildMemberAddEvent, GuildMemberRemoveEvent, GuildMemberUpdateEvent,
+    MessageDeleteEvent, MessageUpdateEvent, PresenceUpdateEvent, ReadyEvent, TypingStartEvent,
+    VoiceServerUpdateEvent,
+};
 use ferricord_model::voice::VoiceState;
+use ferricord_model::{Channel, Guild, Message};
 
 /// Trait for handling Gateway events.
 ///
@@ -100,7 +100,9 @@ pub async fn dispatch_event<H: EventHandler>(handler: &H, event: GatewayEvent) {
         GatewayEvent::PresenceUpdate(event) => handler.presence_update(event).await,
         GatewayEvent::VoiceStateUpdate(state) => handler.voice_state_update(state).await,
         GatewayEvent::VoiceServerUpdate(event) => handler.voice_server_update(event).await,
-        GatewayEvent::InteractionCreate(interaction) => handler.interaction_create(interaction).await,
+        GatewayEvent::InteractionCreate(interaction) => {
+            handler.interaction_create(interaction).await
+        }
         GatewayEvent::Unknown(name, data) => handler.unknown_event(name, data).await,
         _ => {}
     }

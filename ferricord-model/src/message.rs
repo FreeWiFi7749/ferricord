@@ -1,11 +1,11 @@
 //! Message-related models
 
-use serde::{Deserialize, Serialize};
-use serde_repr::{Deserialize_repr, Serialize_repr};
+use crate::channel::Channel;
+use crate::guild::Member;
 use crate::id::{AttachmentId, ChannelId, GuildId, MessageId, RoleId, UserId, WebhookId};
 use crate::user::User;
-use crate::guild::Member;
-use crate::channel::Channel;
+use serde::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 
 /// Represents a message sent in a channel.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -301,7 +301,12 @@ impl Embed {
     }
 
     /// Add a field to the embed.
-    pub fn field(mut self, name: impl Into<String>, value: impl Into<String>, inline: bool) -> Self {
+    pub fn field(
+        mut self,
+        name: impl Into<String>,
+        value: impl Into<String>,
+        inline: bool,
+    ) -> Self {
         self.fields.push(EmbedField {
             name: name.into(),
             value: value.into(),

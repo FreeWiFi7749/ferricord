@@ -147,7 +147,7 @@ impl GatewayConnection {
                 if data.len() >= 4 && data[data.len() - 4..] == [0x00, 0x00, 0xff, 0xff] {
                     let mut decoder = ZlibDecoder::new(&buffer[..]);
                     let mut decompressed = String::new();
-                    
+
                     match decoder.read_to_string(&mut decompressed) {
                         Ok(_) => {
                             buffer.clear();

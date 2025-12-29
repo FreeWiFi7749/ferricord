@@ -11,8 +11,8 @@ use parking_lot::RwLock;
 use tracing::debug;
 
 use ferricord_model::{
-    Channel, ChannelId, CurrentUser, Guild, GuildId, Member, Message, MessageId,
-    Role, RoleId, User, UserId,
+    Channel, ChannelId, CurrentUser, Guild, GuildId, Member, Message, MessageId, Role, RoleId,
+    User, UserId,
 };
 
 use crate::policy::{CachePolicy, FullPolicy};
@@ -137,11 +137,7 @@ impl Cache {
     pub fn guild_channels(&self, guild_id: GuildId) -> Vec<Arc<Channel>> {
         self.guild_channels
             .get(&guild_id)
-            .map(|ids| {
-                ids.iter()
-                    .filter_map(|id| self.channel(*id))
-                    .collect()
-            })
+            .map(|ids| ids.iter().filter_map(|id| self.channel(*id)).collect())
             .unwrap_or_default()
     }
 
@@ -167,7 +163,7 @@ impl Cache {
     /// Remove a channel from the cache.
     pub fn remove_channel(&self, channel_id: ChannelId) {
         debug!("Removing channel from cache: {}", channel_id);
-        
+
         if let Some((_, channel)) = self.channels.remove(&channel_id) {
             if let Some(guild_id) = channel.guild_id {
                 if let Some(mut ids) = self.guild_channels.get_mut(&guild_id) {
@@ -211,16 +207,13 @@ impl Cache {
 
     /// Get the number of cached members in a guild.
     pub fn member_count(&self, guild_id: GuildId) -> usize {
-        self.members
-            .get(&guild_id)
-            .map(|m| m.len())
-            .unwrap_or(0)
+        self.members.get(&guild_id).map(|m| m.len()).unwrap_or(0)
     }
 
     /// Insert or update a member.
     pub fn insert_member(&self, guild_id: GuildId, member: Member) {
         let user_id = member.user.as_ref().map(|u| u.id).unwrap_or_default();
-        
+
         if !self.policy.should_cache_member(guild_id, user_id) {
             return;
         }
@@ -293,7 +286,7 @@ impl Cache {
     /// Insert or update a message.
     pub fn insert_message(&self, message: Message) {
         let channel_id = message.channel_id;
-        
+
         if !self.policy.should_cache_message(channel_id) {
             return;
         }

@@ -87,7 +87,7 @@ impl Client {
     ///     ```
     fn event(&self, py: Python<'_>, func: PyObject) -> PyResult<PyObject> {
         let func_name = func.getattr(py, "__name__")?.extract::<String>(py)?;
-        
+
         let event_name = if func_name.starts_with("on_") {
             func_name[3..].to_string()
         } else {
@@ -183,7 +183,9 @@ impl Client {
                 .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
             let http = Arc::new(http);
 
-            let gateway_info = http.get_gateway_bot().await
+            let gateway_info = http
+                .get_gateway_bot()
+                .await
                 .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
             info!("Gateway URL: {}", gateway_info.url);
@@ -230,7 +232,11 @@ impl Client {
     /// Get all guilds the bot is in.
     #[getter]
     fn guilds(&self) -> Vec<PyGuild> {
-        self.cache.guilds().into_iter().map(|g| PyGuild::new((*g).clone())).collect()
+        self.cache
+            .guilds()
+            .into_iter()
+            .map(|g| PyGuild::new((*g).clone()))
+            .collect()
     }
 
     /// Get the number of guilds.
@@ -255,64 +261,66 @@ impl Client {
         cache: &Arc<Cache>,
         event: GatewayEvent,
     ) {
-        let (event_name, args): (&str, Vec<PyObject>) = Python::with_gil(|py| {
-            match &event {
-                GatewayEvent::Ready(ready) => {
-                    cache.set_current_user(ready.user.clone());
-                    ("ready", vec![])
-                }
-                GatewayEvent::Resumed => ("resumed", vec![]),
-                GatewayEvent::MessageCreate(message) => {
-                    cache.insert_message(message.clone());
-                    let py_message = PyMessage::new(message.clone());
-                    ("message", vec![py_message.into_py(py)])
-                }
-                GatewayEvent::GuildCreate(guild) => {
-                    cache.insert_guild(guild.clone());
-                    let py_guild = PyGuild::new(guild.clone());
-                    ("guild_join", vec![py_guild.into_py(py)])
-                }
-                GatewayEvent::GuildUpdate(guild) => {
-                    cache.insert_guild(guild.clone());
-                    let py_guild = PyGuild::new(guild.clone());
-                    ("guild_update", vec![py_guild.into_py(py)])
-                }
-                GatewayEvent::GuildDelete(unavailable) => {
-                    cache.remove_guild(unavailable.id);
-                    ("guild_remove", vec![unavailable.id.get().into_py(py)])
-                }
-                GatewayEvent::ChannelCreate(channel) => {
-                    cache.insert_channel(channel.clone());
-                    let py_channel = PyChannel::new(channel.clone());
-                    ("channel_create", vec![py_channel.into_py(py)])
-                }
-                GatewayEvent::ChannelUpdate(channel) => {
-                    cache.insert_channel(channel.clone());
-                    let py_channel = PyChannel::new(channel.clone());
-                    ("channel_update", vec![py_channel.into_py(py)])
-                }
-                GatewayEvent::ChannelDelete(channel) => {
-                    cache.remove_channel(channel.id);
-                    let py_channel = PyChannel::new(channel.clone());
-                    ("channel_delete", vec![py_channel.into_py(py)])
-                }
-                GatewayEvent::GuildMemberAdd(event) => {
-                    cache.insert_member(event.guild_id, event.member.clone());
-                    ("member_join", vec![event.guild_id.get().into_py(py)])
-                }
-                GatewayEvent::GuildMemberRemove(event) => {
-                    cache.remove_member(event.guild_id, event.user.id);
-                    let py_user = PyUser::new(event.user.clone());
-                    ("member_remove", vec![event.guild_id.get().into_py(py), py_user.into_py(py)])
-                }
-                GatewayEvent::TypingStart(event) => {
-                    ("typing", vec![
-                        event.channel_id.get().into_py(py),
-                        event.user_id.get().into_py(py),
-                    ])
-                }
-                _ => ("unknown", vec![]),
+        let (event_name, args): (&str, Vec<PyObject>) = Python::with_gil(|py| match &event {
+            GatewayEvent::Ready(ready) => {
+                cache.set_current_user(ready.user.clone());
+                ("ready", vec![])
             }
+            GatewayEvent::Resumed => ("resumed", vec![]),
+            GatewayEvent::MessageCreate(message) => {
+                cache.insert_message(message.clone());
+                let py_message = PyMessage::new(message.clone());
+                ("message", vec![py_message.into_py(py)])
+            }
+            GatewayEvent::GuildCreate(guild) => {
+                cache.insert_guild(guild.clone());
+                let py_guild = PyGuild::new(guild.clone());
+                ("guild_join", vec![py_guild.into_py(py)])
+            }
+            GatewayEvent::GuildUpdate(guild) => {
+                cache.insert_guild(guild.clone());
+                let py_guild = PyGuild::new(guild.clone());
+                ("guild_update", vec![py_guild.into_py(py)])
+            }
+            GatewayEvent::GuildDelete(unavailable) => {
+                cache.remove_guild(unavailable.id);
+                ("guild_remove", vec![unavailable.id.get().into_py(py)])
+            }
+            GatewayEvent::ChannelCreate(channel) => {
+                cache.insert_channel(channel.clone());
+                let py_channel = PyChannel::new(channel.clone());
+                ("channel_create", vec![py_channel.into_py(py)])
+            }
+            GatewayEvent::ChannelUpdate(channel) => {
+                cache.insert_channel(channel.clone());
+                let py_channel = PyChannel::new(channel.clone());
+                ("channel_update", vec![py_channel.into_py(py)])
+            }
+            GatewayEvent::ChannelDelete(channel) => {
+                cache.remove_channel(channel.id);
+                let py_channel = PyChannel::new(channel.clone());
+                ("channel_delete", vec![py_channel.into_py(py)])
+            }
+            GatewayEvent::GuildMemberAdd(event) => {
+                cache.insert_member(event.guild_id, event.member.clone());
+                ("member_join", vec![event.guild_id.get().into_py(py)])
+            }
+            GatewayEvent::GuildMemberRemove(event) => {
+                cache.remove_member(event.guild_id, event.user.id);
+                let py_user = PyUser::new(event.user.clone());
+                (
+                    "member_remove",
+                    vec![event.guild_id.get().into_py(py), py_user.into_py(py)],
+                )
+            }
+            GatewayEvent::TypingStart(event) => (
+                "typing",
+                vec![
+                    event.channel_id.get().into_py(py),
+                    event.user_id.get().into_py(py),
+                ],
+            ),
+            _ => ("unknown", vec![]),
         });
 
         if event_name == "unknown" {

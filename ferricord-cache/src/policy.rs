@@ -134,9 +134,7 @@ pub struct FullPolicy {
 
 impl Default for FullPolicy {
     fn default() -> Self {
-        Self {
-            max_messages: 1000,
-        }
+        Self { max_messages: 1000 }
     }
 }
 

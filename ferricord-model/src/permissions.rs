@@ -1,8 +1,8 @@
 //! Permission-related models
 
+use crate::id::{ChannelId, RoleId, UserId};
 use bitflags::bitflags;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use crate::id::{ChannelId, RoleId, UserId};
 
 bitflags! {
     /// Discord permission flags.

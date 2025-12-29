@@ -1,10 +1,10 @@
 //! Channel-related models
 
+use crate::id::{ChannelId, GuildId, MessageId, UserId};
+use crate::permissions::PermissionOverwrite;
+use crate::user::User;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use crate::id::{ChannelId, GuildId, UserId, MessageId};
-use crate::user::User;
-use crate::permissions::PermissionOverwrite;
 
 /// Represents a Discord channel.
 #[derive(Clone, Debug, Deserialize, Serialize)]

@@ -1,7 +1,7 @@
 //! User-related models
 
-use serde::{Deserialize, Serialize};
 use crate::id::UserId;
+use serde::{Deserialize, Serialize};
 
 /// Represents a Discord user.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -94,7 +94,8 @@ impl User {
 
     /// Returns the URL to the user's avatar, or their default avatar if none is set.
     pub fn display_avatar_url(&self) -> String {
-        self.avatar_url().unwrap_or_else(|| self.default_avatar_url())
+        self.avatar_url()
+            .unwrap_or_else(|| self.default_avatar_url())
     }
 
     /// Returns the user's mention string.

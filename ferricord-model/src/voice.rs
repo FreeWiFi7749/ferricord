@@ -1,8 +1,8 @@
 //! Voice-related models
 
-use serde::{Deserialize, Serialize};
-use crate::id::{ChannelId, GuildId, UserId};
 use crate::guild::Member;
+use crate::id::{ChannelId, GuildId, UserId};
+use serde::{Deserialize, Serialize};
 
 /// Represents a user's voice connection status.
 #[derive(Clone, Debug, Deserialize, Serialize)]

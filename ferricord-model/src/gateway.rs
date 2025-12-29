@@ -1,13 +1,13 @@
 //! Gateway-related models
 
+use crate::channel::Channel;
+use crate::guild::{Emoji, Guild, Member, PartialGuild, Role};
+use crate::id::{ChannelId, GuildId, UserId};
+use crate::message::Message;
+use crate::user::{CurrentUser, User};
+use crate::voice::VoiceState;
 use bitflags::bitflags;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use crate::id::{ChannelId, GuildId, UserId};
-use crate::user::{CurrentUser, User};
-use crate::guild::{Guild, Member, Role, Emoji, PartialGuild};
-use crate::channel::Channel;
-use crate::message::Message;
-use crate::voice::VoiceState;
 
 bitflags! {
     /// Gateway intents for filtering events.

@@ -7,4 +7,4 @@ pub mod ratelimit;
 pub mod routes;
 
 pub use client::HttpClient;
-pub use ratelimit::{RateLimiter, RateLimitInfo};
+pub use ratelimit::{RateLimitInfo, RateLimiter};

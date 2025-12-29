@@ -2,14 +2,16 @@
 //!
 //! This module provides a rate-limited HTTP client for making requests to the Discord API.
 
-use std::sync::Arc;
+use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use reqwest::{Client, Response, StatusCode};
 use serde::{de::DeserializeOwned, Serialize};
+use std::sync::Arc;
 use tracing::{debug, error, warn};
-use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 
 use ferricord_core::{Error, Result};
-use ferricord_model::{ChannelId, Message, MessageId, User, Guild, Channel, Member, GuildId, UserId};
+use ferricord_model::{
+    Channel, ChannelId, Guild, GuildId, Member, Message, MessageId, User, UserId,
+};
 
 use crate::ratelimit::RateLimiter;
 use crate::routes::{self, Method, Route};
@@ -95,8 +97,7 @@ impl HttpClient {
                         .map_err(|e| Error::http(format!("Failed to read response: {}", e)))?;
 
                     if text.is_empty() {
-                        return serde_json::from_str("null")
-                            .map_err(|e| Error::Json(e));
+                        return serde_json::from_str("null").map_err(|e| Error::Json(e));
                     }
 
                     return serde_json::from_str(&text).map_err(|e| {
@@ -105,10 +106,9 @@ impl HttpClient {
                     });
                 }
                 StatusCode::TOO_MANY_REQUESTS => {
-                    let body: serde_json::Value = response
-                        .json()
-                        .await
-                        .map_err(|e| Error::http(format!("Failed to parse rate limit response: {}", e)))?;
+                    let body: serde_json::Value = response.json().await.map_err(|e| {
+                        Error::http(format!("Failed to parse rate limit response: {}", e))
+                    })?;
 
                     let retry_after = body["retry_after"].as_f64().unwrap_or(1.0);
                     let global = body["global"].as_bool().unwrap_or(false);
@@ -301,11 +301,7 @@ impl HttpClient {
     }
 
     /// Delete a message.
-    pub async fn delete_message(
-        &self,
-        channel_id: ChannelId,
-        message_id: MessageId,
-    ) -> Result<()> {
+    pub async fn delete_message(&self, channel_id: ChannelId, message_id: MessageId) -> Result<()> {
         self.request(routes::channels::delete_message(channel_id, message_id))
             .await
     }
@@ -367,11 +363,7 @@ impl HttpClient {
     }
 
     /// List guild members.
-    pub async fn list_members(
-        &self,
-        guild_id: GuildId,
-        limit: Option<u32>,
-    ) -> Result<Vec<Member>> {
+    pub async fn list_members(&self, guild_id: GuildId, limit: Option<u32>) -> Result<Vec<Member>> {
         let mut route = routes::guilds::list_members(guild_id);
         if let Some(limit) = limit {
             route.path = format!("{}?limit={}", route.path, limit.min(1000));

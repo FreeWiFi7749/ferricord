@@ -2,10 +2,10 @@
 //!
 //! Discord uses a combination of global and per-route rate limits.
 
+use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use parking_lot::RwLock;
 use tokio::sync::Semaphore;
 use tracing::{debug, warn};
 
@@ -135,7 +135,7 @@ impl RateLimiter {
         self.check_global().await;
 
         let bucket_key = self.get_or_create_bucket(route);
-        
+
         let wait_duration = {
             let buckets = self.buckets.read();
             if let Some(bucket) = buckets.get(&bucket_key) {
@@ -169,13 +169,15 @@ impl RateLimiter {
         drop(route_to_bucket);
 
         let bucket_key = route.to_string();
-        
+
         let mut buckets = self.buckets.write();
-        buckets.entry(bucket_key.clone()).or_insert_with(RouteBucket::new);
-        
+        buckets
+            .entry(bucket_key.clone())
+            .or_insert_with(RouteBucket::new);
+
         let mut route_to_bucket = self.route_to_bucket.write();
         route_to_bucket.insert(route.to_string(), bucket_key.clone());
-        
+
         bucket_key
     }
 
@@ -224,7 +226,7 @@ impl RateLimiter {
     /// Handle a 429 rate limit response.
     pub async fn handle_rate_limit(&self, route: &str, retry_after: f64, global: bool) {
         let duration = Duration::from_secs_f64(retry_after);
-        
+
         if global {
             warn!("Global rate limit hit, retry after {:?}", duration);
             let mut global_state = self.global.write();

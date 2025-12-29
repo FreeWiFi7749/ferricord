@@ -28,8 +28,7 @@ macro_rules! impl_id {
             pub fn created_at(self) -> chrono::DateTime<chrono::Utc> {
                 const DISCORD_EPOCH: u64 = 1420070400000;
                 let timestamp_ms = (self.0 >> 22) + DISCORD_EPOCH;
-                chrono::DateTime::from_timestamp_millis(timestamp_ms as i64)
-                    .unwrap_or_default()
+                chrono::DateTime::from_timestamp_millis(timestamp_ms as i64).unwrap_or_default()
             }
         }
 
@@ -74,9 +73,7 @@ macro_rules! impl_id {
                 D: Deserializer<'de>,
             {
                 let s = String::deserialize(deserializer)?;
-                s.parse::<u64>()
-                    .map(Self)
-                    .map_err(serde::de::Error::custom)
+                s.parse::<u64>().map(Self).map_err(serde::de::Error::custom)
             }
         }
     };
@@ -88,17 +85,38 @@ impl_id!(ChannelId, "A unique identifier for a Discord channel.");
 impl_id!(MessageId, "A unique identifier for a Discord message.");
 impl_id!(RoleId, "A unique identifier for a Discord role.");
 impl_id!(EmojiId, "A unique identifier for a Discord custom emoji.");
-impl_id!(ApplicationId, "A unique identifier for a Discord application.");
+impl_id!(
+    ApplicationId,
+    "A unique identifier for a Discord application."
+);
 impl_id!(WebhookId, "A unique identifier for a Discord webhook.");
-impl_id!(AttachmentId, "A unique identifier for a Discord attachment.");
-impl_id!(StickerPackId, "A unique identifier for a Discord sticker pack.");
+impl_id!(
+    AttachmentId,
+    "A unique identifier for a Discord attachment."
+);
+impl_id!(
+    StickerPackId,
+    "A unique identifier for a Discord sticker pack."
+);
 impl_id!(StickerId, "A unique identifier for a Discord sticker.");
-impl_id!(InteractionId, "A unique identifier for a Discord interaction.");
+impl_id!(
+    InteractionId,
+    "A unique identifier for a Discord interaction."
+);
 impl_id!(CommandId, "A unique identifier for an application command.");
-impl_id!(IntegrationId, "A unique identifier for a Discord integration.");
+impl_id!(
+    IntegrationId,
+    "A unique identifier for a Discord integration."
+);
 impl_id!(StageInstanceId, "A unique identifier for a stage instance.");
-impl_id!(ScheduledEventId, "A unique identifier for a scheduled event.");
-impl_id!(AuditLogEntryId, "A unique identifier for an audit log entry.");
+impl_id!(
+    ScheduledEventId,
+    "A unique identifier for a scheduled event."
+);
+impl_id!(
+    AuditLogEntryId,
+    "A unique identifier for an audit log entry."
+);
 
 #[cfg(test)]
 mod tests {
