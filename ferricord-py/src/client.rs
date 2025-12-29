@@ -99,9 +99,15 @@ impl Client {
 
         let handlers = self.event_handlers.clone();
         let func_clone = func.clone_ref(py);
-        pyo3_async_runtimes::tokio::get_runtime().block_on(async {
-            handlers.write().await.insert(event_name, func_clone);
-        });
+
+        if let Ok(mut guard) = handlers.try_write() {
+            guard.insert(event_name, func_clone);
+        } else {
+            let handlers_clone = handlers.clone();
+            pyo3_async_runtimes::tokio::get_runtime().spawn(async move {
+                handlers_clone.write().await.insert(event_name, func_clone);
+            });
+        }
 
         Ok(func)
     }
@@ -117,6 +123,8 @@ impl Client {
         let event_handlers = self.event_handlers.clone();
         let cache = self.cache.clone();
         let running = self.running.clone();
+        let error_holder: Arc<RwLock<Option<String>>> = Arc::new(RwLock::new(None));
+        let error_holder_clone = error_holder.clone();
 
         py.allow_threads(|| {
             pyo3_async_runtimes::tokio::get_runtime().block_on(async move {
@@ -126,6 +134,8 @@ impl Client {
                     Ok(http) => Arc::new(http),
                     Err(e) => {
                         error!("Failed to create HTTP client: {}", e);
+                        *error_holder_clone.write().await =
+                            Some(format!("Failed to create HTTP client: {}", e));
                         return;
                     }
                 };
@@ -134,6 +144,8 @@ impl Client {
                     Ok(info) => info,
                     Err(e) => {
                         error!("Failed to get gateway info: {}", e);
+                        *error_holder_clone.write().await =
+                            Some(format!("Failed to get gateway info: {}", e));
                         return;
                     }
                 };
@@ -164,6 +176,12 @@ impl Client {
                 shard_handle.abort();
             });
         });
+
+        if let Some(err) = pyo3_async_runtimes::tokio::get_runtime()
+            .block_on(async { error_holder.read().await.clone() })
+        {
+            return Err(pyo3::exceptions::PyRuntimeError::new_err(err));
+        }
 
         Ok(())
     }

@@ -326,7 +326,9 @@ impl Shard {
     /// Emit an event to the event channel.
     fn emit_event(&self, event: GatewayEvent) {
         if let Some(tx) = &self.event_tx {
-            let _ = tx.send(event);
+            if let Err(e) = tx.send(event) {
+                error!("Shard {} failed to send event: {}", self.config.shard_id, e);
+            }
         }
     }
 

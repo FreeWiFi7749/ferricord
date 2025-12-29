@@ -1,7 +1,7 @@
 //! Voice-related models
 
 use crate::guild::Member;
-use crate::id::{ChannelId, GuildId, UserId};
+use crate::id::{ChannelId, GuildId, ScheduledEventId, StageInstanceId, UserId};
 use serde::{Deserialize, Serialize};
 
 /// Represents a user's voice connection status.
@@ -102,7 +102,7 @@ pub struct VoiceChannelEffectSendEvent {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct StageInstance {
     /// ID of this Stage instance.
-    pub id: String,
+    pub id: StageInstanceId,
     /// Guild ID of the associated Stage channel.
     pub guild_id: GuildId,
     /// ID of the associated Stage channel.
@@ -116,7 +116,7 @@ pub struct StageInstance {
     pub discoverable_disabled: bool,
     /// ID of the scheduled event for this Stage instance.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub guild_scheduled_event_id: Option<String>,
+    pub guild_scheduled_event_id: Option<ScheduledEventId>,
 }
 
 /// Stage privacy level.

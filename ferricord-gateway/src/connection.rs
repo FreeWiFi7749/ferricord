@@ -17,6 +17,8 @@ use tracing::{debug, error, trace, warn};
 use ferricord_core::{Error, Result};
 use ferricord_model::gateway::GatewayPayload;
 
+const MAX_ZLIB_BUFFER_SIZE: usize = 10 * 1024 * 1024;
+
 /// Type alias for the WebSocket stream.
 pub type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
@@ -61,6 +63,8 @@ impl GatewayConnection {
     /// Connect to the gateway.
     pub async fn connect(&self, url: &str) -> Result<()> {
         *self.state.lock().await = ConnectionState::Connecting;
+
+        self.zlib_buffer.lock().await.clear();
 
         let gateway_url = format!("{}?v=10&encoding=json&compress=zlib-stream", url);
         debug!("Connecting to gateway: {}", gateway_url);
@@ -142,6 +146,15 @@ impl GatewayConnection {
             }
             WsMessage::Binary(data) => {
                 let mut buffer = self.zlib_buffer.lock().await;
+
+                if buffer.len() + data.len() > MAX_ZLIB_BUFFER_SIZE {
+                    buffer.clear();
+                    return Err(Error::websocket(format!(
+                        "Zlib buffer exceeded maximum size of {} bytes",
+                        MAX_ZLIB_BUFFER_SIZE
+                    )));
+                }
+
                 buffer.extend_from_slice(&data);
 
                 if data.len() >= 4 && data[data.len() - 4..] == [0x00, 0x00, 0xff, 0xff] {

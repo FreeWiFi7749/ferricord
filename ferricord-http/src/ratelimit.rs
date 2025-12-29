@@ -40,11 +40,8 @@ impl RateLimitInfo {
 
     /// Get the duration to wait before the rate limit resets.
     pub fn wait_duration(&self) -> Duration {
-        if Instant::now() >= self.reset_at {
-            Duration::ZERO
-        } else {
-            self.reset_at - Instant::now()
-        }
+        let now = Instant::now();
+        self.reset_at.saturating_duration_since(now)
     }
 }
 
@@ -164,11 +161,19 @@ impl RateLimiter {
 
     /// Get or create a bucket for a route.
     fn get_or_create_bucket(&self, route: &str) -> String {
-        let route_to_bucket = self.route_to_bucket.read();
+        // First check with read lock
+        {
+            let route_to_bucket = self.route_to_bucket.read();
+            if let Some(bucket_key) = route_to_bucket.get(route) {
+                return bucket_key.clone();
+            }
+        }
+
+        // Acquire write lock and check again to avoid TOCTOU race
+        let mut route_to_bucket = self.route_to_bucket.write();
         if let Some(bucket_key) = route_to_bucket.get(route) {
             return bucket_key.clone();
         }
-        drop(route_to_bucket);
 
         let bucket_key = route.to_string();
 
@@ -177,7 +182,6 @@ impl RateLimiter {
             .entry(bucket_key.clone())
             .or_insert_with(RouteBucket::new);
 
-        let mut route_to_bucket = self.route_to_bucket.write();
         route_to_bucket.insert(route.to_string(), bucket_key.clone());
 
         bucket_key

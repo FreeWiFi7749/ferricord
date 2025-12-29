@@ -2,7 +2,7 @@
 
 use crate::channel::Channel;
 use crate::guild::Member;
-use crate::id::{ChannelId, CommandId, GuildId, InteractionId, UserId};
+use crate::id::{ApplicationId, ChannelId, CommandId, GuildId, InteractionId, UserId};
 use crate::message::{Attachment, Component, Embed, Message};
 use crate::permissions::Permissions;
 use crate::user::User;
@@ -15,7 +15,7 @@ pub struct Interaction {
     /// ID of the interaction.
     pub id: InteractionId,
     /// ID of the application this interaction is for.
-    pub application_id: UserId,
+    pub application_id: ApplicationId,
     /// Type of interaction.
     #[serde(rename = "type")]
     pub kind: InteractionType,
@@ -238,7 +238,7 @@ pub struct ApplicationCommand {
     #[serde(rename = "type", default)]
     pub kind: ApplicationCommandType,
     /// ID of the parent application.
-    pub application_id: UserId,
+    pub application_id: ApplicationId,
     /// Guild ID of the command, if not global.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub guild_id: Option<GuildId>,
