@@ -119,7 +119,7 @@ impl Client {
     ///
     /// Args:
     ///     token: The bot token to use.
-    fn run(&mut self, py: Python<'_>, token: String) -> PyResult<()> {
+    fn run(&self, py: Python<'_>, token: String) -> PyResult<()> {
         let intents = self.intents.inner();
         let event_handlers = self.event_handlers.clone();
         let cache = self.cache.clone();
