@@ -446,14 +446,26 @@ impl Client {
 
                 match result {
                     Ok(coro) => {
-                        if let Ok(future) =
-                            pyo3_async_runtimes::tokio::into_future(coro.bind(py).clone())
-                        {
-                            tokio::spawn(async move {
-                                if let Err(e) = future.await {
-                                    error!("Event handler error: {:?}", e);
+                        // Try to convert to a Rust future first (works in async context)
+                        match pyo3_async_runtimes::tokio::into_future(coro.bind(py).clone()) {
+                            Ok(future) => {
+                                tokio::spawn(async move {
+                                    if let Err(e) = future.await {
+                                        error!("Event handler error: {:?}", e);
+                                    }
+                                });
+                            }
+                            Err(_) => {
+                                // Fallback: use asyncio.run() for blocking context
+                                // This handles the case where there's no Python event loop
+                                if let Ok(asyncio) = py.import("asyncio") {
+                                    if let Err(e) = asyncio.call_method1("run", (coro.bind(py),)) {
+                                        error!("Event handler error: {:?}", e);
+                                    }
+                                } else {
+                                    error!("Failed to import asyncio for event handler");
                                 }
-                            });
+                            }
                         }
                     }
                     Err(e) => {
