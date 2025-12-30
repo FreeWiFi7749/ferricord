@@ -169,6 +169,308 @@ class UtilityCog:
 
 
 # =============================================================================
+# Slash Commands (Phase 2)
+# =============================================================================
+# 
+# Slash commands are registered with Discord and appear in the command menu
+# when users type "/". They are triggered via INTERACTION_CREATE gateway events.
+#
+# To register slash commands with Discord, you need to use the Discord API:
+# POST /applications/{application_id}/commands
+#
+# The decorators below register handlers that will be called when users
+# invoke these commands.
+
+@client.slash_command(name="ping", description="Check if the bot is responsive")
+async def slash_ping(interaction):
+    """
+    Simple ping command to test bot responsiveness.
+    
+    Interaction properties:
+    - id: Interaction ID
+    - application_id: Bot's application ID
+    - type: Interaction type (2 = APPLICATION_COMMAND)
+    - token: Interaction token for responding
+    - guild_id: Guild where interaction occurred
+    - channel_id: Channel where interaction occurred
+    - member: Guild member who triggered (if in guild)
+    - user: User who triggered (if in DM)
+    - data: Command data including name and options
+    """
+    print(f"[Slash Command] /ping triggered by user")
+    
+    # Respond to the interaction
+    await client.respond_to_interaction(
+        interaction_id=interaction.id,
+        interaction_token=interaction.token,
+        content="Pong! Bot is responsive.",
+        ephemeral=False  # Set to True to make response only visible to user
+    )
+
+
+@client.slash_command(name="info", description="Get bot information")
+async def slash_info(interaction):
+    """Get information about the bot."""
+    print(f"[Slash Command] /info triggered")
+    
+    user = client.user
+    metrics = client.get_metrics()
+    
+    content = f"""**Bot Information**
+Name: {user.tag() if user else 'Unknown'}
+Guilds: {metrics.get('guilds', 0)}
+Channels: {metrics.get('channels', 0)}
+Users: {metrics.get('users', 0)}
+Event Handlers: {metrics.get('event_handlers', 0)}
+Slash Commands: {metrics.get('slash_commands', 0)}"""
+    
+    await client.respond_to_interaction(
+        interaction_id=interaction.id,
+        interaction_token=interaction.token,
+        content=content,
+        ephemeral=True  # Only visible to the user who triggered
+    )
+
+
+@client.slash_command(
+    name="greet", 
+    description="Greet a user",
+    guild_id="905425505703067648"  # Optional: Register only in specific guild
+)
+async def slash_greet(interaction):
+    """
+    Greet command with options.
+    
+    Command options are available in interaction.data.options
+    Each option has: name, type, value
+    """
+    print(f"[Slash Command] /greet triggered")
+    
+    # Get options from interaction data
+    options = interaction.data.get("options", []) if interaction.data else []
+    
+    # Find the "user" option
+    target_user = None
+    for opt in options:
+        if opt.get("name") == "user":
+            target_user = opt.get("value")
+            break
+    
+    if target_user:
+        content = f"Hello <@{target_user}>! Welcome!"
+    else:
+        content = "Hello! Please specify a user to greet."
+    
+    await client.respond_to_interaction(
+        interaction_id=interaction.id,
+        interaction_token=interaction.token,
+        content=content
+    )
+
+
+@client.slash_command(name="defer_example", description="Example of deferred response")
+async def slash_defer_example(interaction):
+    """
+    Example showing how to defer a response for long-running operations.
+    
+    Use defer_interaction() when your command takes more than 3 seconds.
+    Discord requires a response within 3 seconds, so defer first, then
+    edit the response when ready.
+    """
+    print(f"[Slash Command] /defer_example triggered")
+    
+    # Defer the response (shows "Bot is thinking...")
+    await client.defer_interaction(
+        interaction_id=interaction.id,
+        interaction_token=interaction.token,
+        ephemeral=False
+    )
+    
+    # Simulate long-running operation
+    await asyncio.sleep(2)
+    
+    # Edit the deferred response with the actual content
+    await client.edit_interaction_response(
+        interaction_token=interaction.token,
+        content="Done! This response was deferred while processing."
+    )
+
+
+# =============================================================================
+# Components - Buttons and Select Menus (Phase 2)
+# =============================================================================
+#
+# Components are interactive elements attached to messages.
+# When users interact with them, an INTERACTION_CREATE event is sent
+# with type = 3 (MESSAGE_COMPONENT).
+#
+# Component types:
+# - Buttons (type 2): Clickable buttons
+# - Select Menus (type 3): Dropdown menus
+# - Text Inputs (type 4): Text input fields (only in modals)
+
+@client.component(custom_id="button_confirm")
+async def handle_confirm_button(interaction):
+    """
+    Handler for the confirm button.
+    
+    The custom_id is set when creating the button and is used to
+    route the interaction to the correct handler.
+    """
+    print(f"[Component] Confirm button clicked")
+    
+    await client.respond_to_interaction(
+        interaction_id=interaction.id,
+        interaction_token=interaction.token,
+        content="You clicked Confirm!",
+        ephemeral=True
+    )
+
+
+@client.component(custom_id="button_cancel")
+async def handle_cancel_button(interaction):
+    """Handler for the cancel button."""
+    print(f"[Component] Cancel button clicked")
+    
+    await client.respond_to_interaction(
+        interaction_id=interaction.id,
+        interaction_token=interaction.token,
+        content="You clicked Cancel!",
+        ephemeral=True
+    )
+
+
+@client.component(custom_id="select_color")
+async def handle_color_select(interaction):
+    """
+    Handler for the color select menu.
+    
+    Selected values are in interaction.data.values (list of strings)
+    """
+    print(f"[Component] Color select menu used")
+    
+    # Get selected values
+    values = interaction.data.get("values", []) if interaction.data else []
+    selected = values[0] if values else "nothing"
+    
+    await client.respond_to_interaction(
+        interaction_id=interaction.id,
+        interaction_token=interaction.token,
+        content=f"You selected: {selected}",
+        ephemeral=True
+    )
+
+
+@client.component(custom_id="select_role")
+async def handle_role_select(interaction):
+    """Handler for role selection."""
+    print(f"[Component] Role select menu used")
+    
+    values = interaction.data.get("values", []) if interaction.data else []
+    
+    await client.respond_to_interaction(
+        interaction_id=interaction.id,
+        interaction_token=interaction.token,
+        content=f"Selected roles: {', '.join(values) if values else 'none'}",
+        ephemeral=True
+    )
+
+
+# =============================================================================
+# Modals - Form Dialogs (Phase 2)
+# =============================================================================
+#
+# Modals are popup forms that can contain text input fields.
+# They are triggered by responding to an interaction with type 9 (MODAL).
+# When submitted, an INTERACTION_CREATE event is sent with type = 5 (MODAL_SUBMIT).
+
+@client.modal(custom_id="feedback_modal")
+async def handle_feedback_modal(interaction):
+    """
+    Handler for the feedback modal submission.
+    
+    Text input values are in interaction.data.components
+    Each component has: type, custom_id, value
+    """
+    print(f"[Modal] Feedback modal submitted")
+    
+    # Extract values from modal components
+    components = interaction.data.get("components", []) if interaction.data else []
+    
+    feedback_title = ""
+    feedback_content = ""
+    
+    for row in components:
+        for component in row.get("components", []):
+            if component.get("custom_id") == "feedback_title":
+                feedback_title = component.get("value", "")
+            elif component.get("custom_id") == "feedback_content":
+                feedback_content = component.get("value", "")
+    
+    print(f"  Title: {feedback_title}")
+    print(f"  Content: {feedback_content[:100]}...")
+    
+    await client.respond_to_interaction(
+        interaction_id=interaction.id,
+        interaction_token=interaction.token,
+        content=f"Thank you for your feedback!\n**Title:** {feedback_title}",
+        ephemeral=True
+    )
+
+
+@client.modal(custom_id="report_modal")
+async def handle_report_modal(interaction):
+    """Handler for the report modal submission."""
+    print(f"[Modal] Report modal submitted")
+    
+    components = interaction.data.get("components", []) if interaction.data else []
+    
+    report_reason = ""
+    report_details = ""
+    
+    for row in components:
+        for component in row.get("components", []):
+            if component.get("custom_id") == "report_reason":
+                report_reason = component.get("value", "")
+            elif component.get("custom_id") == "report_details":
+                report_details = component.get("value", "")
+    
+    print(f"  Reason: {report_reason}")
+    print(f"  Details: {report_details[:100]}...")
+    
+    await client.respond_to_interaction(
+        interaction_id=interaction.id,
+        interaction_token=interaction.token,
+        content="Your report has been submitted. Thank you!",
+        ephemeral=True
+    )
+
+
+@client.modal(custom_id="application_modal")
+async def handle_application_modal(interaction):
+    """Handler for application form modal."""
+    print(f"[Modal] Application modal submitted")
+    
+    components = interaction.data.get("components", []) if interaction.data else []
+    
+    fields = {}
+    for row in components:
+        for component in row.get("components", []):
+            custom_id = component.get("custom_id", "")
+            value = component.get("value", "")
+            fields[custom_id] = value
+    
+    print(f"  Application fields: {fields}")
+    
+    await client.respond_to_interaction(
+        interaction_id=interaction.id,
+        interaction_token=interaction.token,
+        content="Your application has been received! We'll review it shortly.",
+        ephemeral=True
+    )
+
+
+# =============================================================================
 # Event Handlers - All Phase 1 Events
 # =============================================================================
 
@@ -531,6 +833,90 @@ async def on_resumed():
     
     print(f"\n[{timestamp}] SESSION RESUMED")
     print("  Successfully reconnected to Discord Gateway")
+
+
+# =============================================================================
+# AutoShardedClient Example (Phase 2)
+# =============================================================================
+#
+# AutoShardedClient automatically determines the number of shards needed
+# based on Discord's recommendation and manages multiple shard connections.
+# Use this for bots in 2500+ guilds.
+#
+# Example usage:
+#
+#   from ferricord import AutoShardedClient, Intents
+#   
+#   intents = Intents.default()
+#   intents.message_content = True
+#   
+#   sharded_client = AutoShardedClient(intents=intents)
+#   
+#   @sharded_client.event
+#   async def on_ready():
+#       print(f"Bot ready with {sharded_client.shard_count} shards")
+#       print(f"Connected shards: {sharded_client.connected_shards}")
+#   
+#   @sharded_client.event
+#   async def on_message(message):
+#       if message.content == "!shards":
+#           metrics = sharded_client.get_metrics()
+#           await sharded_client.send_message(
+#               message.channel_id,
+#               f"Shards: {metrics.get('shard_count', 0)}\n"
+#               f"Connected: {metrics.get('connected_shards', [])}"
+#           )
+#   
+#   sharded_client.run(token)
+#
+# AutoShardedClient features:
+# - Automatic shard count detection from Discord's /gateway/bot endpoint
+# - 5-second stagger between shard connections (Discord requirement)
+# - Shared cache across all shards
+# - Same event handlers work across all shards
+# - get_metrics() includes shard_count and connected_shards
+
+def run_sharded_bot():
+    """
+    Alternative entry point for running with AutoShardedClient.
+    
+    Uncomment and use this instead of main() for large bots.
+    """
+    sharded_intents = create_intents()
+    sharded_client = AutoShardedClient(intents=sharded_intents)
+    
+    @sharded_client.event
+    async def on_ready():
+        print(f"\n[AutoShardedClient] Bot ready!")
+        print(f"  Shard count: {sharded_client.shard_count}")
+        print(f"  Connected shards: {sharded_client.connected_shards}")
+        
+        metrics = sharded_client.get_metrics()
+        print(f"  Guilds: {metrics.get('guilds', 0)}")
+    
+    @sharded_client.event
+    async def on_message(message):
+        if message.author.bot:
+            return
+        
+        if message.content == "!shards":
+            metrics = sharded_client.get_metrics()
+            await sharded_client.send_message(
+                message.channel_id,
+                f"**Shard Information**\n"
+                f"Total Shards: {metrics.get('shard_count', 0)}\n"
+                f"Connected: {metrics.get('connected_shards', [])}\n"
+                f"Guilds: {metrics.get('guilds', 0)}"
+            )
+    
+    try:
+        token = get_token()
+        print("[AutoShardedClient] Starting with automatic sharding...")
+        sharded_client.run(token)
+    except Exception as e:
+        print(f"[Error] {e}")
+        return 1
+    return 0
 
 
 # =============================================================================
