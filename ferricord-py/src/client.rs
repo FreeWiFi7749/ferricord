@@ -147,28 +147,12 @@ impl Client {
         let cache = self.cache.clone();
         let running = self.running.clone();
         let http_client = self.http.clone();
+        let application_id = self.application_id.clone();
         let error_holder: Arc<RwLock<Option<String>>> = Arc::new(RwLock::new(None));
         let error_holder_clone = error_holder.clone();
 
-        // Use a flag to signal shutdown from signal checker
+        // Use a flag to signal shutdown
         let shutdown_flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let shutdown_flag_clone = shutdown_flag.clone();
-
-        // Spawn a thread to periodically check Python signals (Ctrl+C)
-        // This is necessary because tokio::signal::ctrl_c() doesn't work well
-        // when Python has already registered its own signal handler
-        let signal_thread = std::thread::spawn(move || {
-            while !shutdown_flag_clone.load(std::sync::atomic::Ordering::Relaxed) {
-                std::thread::sleep(std::time::Duration::from_millis(100));
-                // Check if Python received a signal (like SIGINT from Ctrl+C)
-                let got_signal = Python::with_gil(|py| py.check_signals().is_err());
-                if got_signal {
-                    shutdown_flag_clone.store(true, std::sync::atomic::Ordering::Relaxed);
-                    break;
-                }
-            }
-        });
-
         let shutdown_flag_async = shutdown_flag.clone();
 
         py.allow_threads(|| {
@@ -234,9 +218,18 @@ impl Client {
 
                 while *running.read().await {
                     tokio::select! {
-                        // Check if signal thread detected Ctrl+C
+                        // Check for Ctrl+C by calling Python's check_signals
+                        // This MUST be done in the main thread context for Python signal handling
                         _ = signal_check_interval.tick() => {
+                            // Check shutdown flag first
                             if shutdown_flag_async.load(std::sync::atomic::Ordering::Relaxed) {
+                                info!("Received shutdown signal, shutting down...");
+                                got_sigint = true;
+                                break;
+                            }
+                            // Check Python signals (Ctrl+C) - must be done from main thread
+                            let got_signal = Python::with_gil(|py| py.check_signals().is_err());
+                            if got_signal {
                                 info!("Received Ctrl+C, shutting down...");
                                 got_sigint = true;
                                 break;
@@ -252,7 +245,7 @@ impl Client {
                         }
                         // Process incoming events from the shard
                         Some(event) = event_rx.recv() => {
-                            Self::handle_event(&event_handlers, &cache, event).await;
+                            Self::handle_event(&event_handlers, &cache, &application_id, event).await;
                         }
                     }
                 }
@@ -268,10 +261,6 @@ impl Client {
                 }
             });
         });
-
-        // Signal the signal thread to stop and wait for it
-        shutdown_flag.store(true, std::sync::atomic::Ordering::Relaxed);
-        let _ = signal_thread.join();
 
         if let Some(err) = pyo3_async_runtimes::tokio::get_runtime()
             .block_on(async { error_holder.read().await.clone() })
@@ -301,6 +290,7 @@ impl Client {
         let running = self.running.clone();
         let task_handles = self.task_handles.clone();
         let http_client = self.http.clone();
+        let application_id = self.application_id.clone();
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             *running.write().await = true;
@@ -333,7 +323,7 @@ impl Client {
             let event_handle = tokio::spawn(async move {
                 while *running.read().await {
                     if let Some(event) = event_rx.recv().await {
-                        Self::handle_event(&event_handlers, &cache, event).await;
+                        Self::handle_event(&event_handlers, &cache, &application_id, event).await;
                     }
                 }
             });
@@ -1322,11 +1312,21 @@ impl Client {
     async fn handle_event(
         handlers: &Arc<RwLock<HashMap<String, PyObject>>>,
         cache: &Arc<Cache>,
+        application_id: &Arc<RwLock<Option<u64>>>,
         event: GatewayEvent,
     ) {
         let (event_name, args): (&str, Vec<PyObject>) = Python::with_gil(|py| match &event {
             GatewayEvent::Ready(ready) => {
                 cache.set_current_user(ready.user.clone());
+                // Extract application ID from READY event
+                if let Some(ref app) = ready.application {
+                    let app_id = app.id.get();
+                    let app_id_clone = application_id.clone();
+                    tokio::spawn(async move {
+                        *app_id_clone.write().await = Some(app_id);
+                    });
+                    info!("Application ID set from READY event: {}", app_id);
+                }
                 ("ready", vec![])
             }
             GatewayEvent::Resumed => ("resumed", vec![]),
@@ -1472,6 +1472,8 @@ pub struct AutoShardedClient {
     shard_count: Arc<RwLock<u32>>,
     /// Shard IDs that are currently connected.
     connected_shards: Arc<RwLock<Vec<u32>>>,
+    /// Application ID (set after connecting).
+    application_id: Arc<RwLock<Option<u64>>>,
 }
 
 #[pymethods]
@@ -1493,6 +1495,7 @@ impl AutoShardedClient {
             running: Arc::new(RwLock::new(false)),
             shard_count: Arc::new(RwLock::new(0)),
             connected_shards: Arc::new(RwLock::new(Vec::new())),
+            application_id: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -1532,6 +1535,7 @@ impl AutoShardedClient {
         let http_client = self.http.clone();
         let shard_count_holder = self.shard_count.clone();
         let connected_shards = self.connected_shards.clone();
+        let application_id = self.application_id.clone();
         let error_holder: Arc<RwLock<Option<String>>> = Arc::new(RwLock::new(None));
         let error_holder_clone = error_holder.clone();
 
@@ -1621,15 +1625,23 @@ impl AutoShardedClient {
 
                 let mut got_sigint = false;
 
+                // Create an interval for checking Python signals (Ctrl+C)
+                let mut signal_check_interval =
+                    tokio::time::interval(std::time::Duration::from_millis(100));
+
                 while *running.read().await {
                     tokio::select! {
-                        _ = tokio::signal::ctrl_c() => {
-                            info!("Received Ctrl+C, shutting down...");
-                            got_sigint = true;
-                            break;
+                        // Check for Ctrl+C by calling Python's check_signals
+                        _ = signal_check_interval.tick() => {
+                            let got_signal = Python::with_gil(|py| py.check_signals().is_err());
+                            if got_signal {
+                                info!("Received Ctrl+C, shutting down...");
+                                got_sigint = true;
+                                break;
+                            }
                         }
                         Some(event) = event_rx.recv() => {
-                            Client::handle_event(&event_handlers, &cache, event).await;
+                            Client::handle_event(&event_handlers, &cache, &application_id, event).await;
                         }
                     }
                 }
