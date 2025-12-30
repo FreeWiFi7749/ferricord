@@ -867,8 +867,21 @@ impl Client {
         py: Python<'_>,
         name: String,
         description: String,
-        guild_id: Option<u64>,
+        guild_id: Option<&pyo3::Bound<'_, pyo3::PyAny>>,
     ) -> PyResult<PyObject> {
+        // Convert guild_id from string or int to Option<u64>
+        let guild_id: Option<u64> = match guild_id {
+            Some(val) => {
+                if let Ok(id) = val.extract::<u64>() {
+                    Some(id)
+                } else if let Ok(id_str) = val.extract::<String>() {
+                    id_str.parse::<u64>().ok()
+                } else {
+                    None
+                }
+            }
+            None => None,
+        };
         let handlers = self.slash_command_handlers.clone();
         let name_clone = name.clone();
 
