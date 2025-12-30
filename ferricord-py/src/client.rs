@@ -13,6 +13,7 @@ use tracing::{error, info};
 
 use ferricord_cache::Cache;
 use ferricord_gateway::{Shard, ShardConfig};
+use ferricord_http::client::CreateApplicationCommand;
 use ferricord_http::HttpClient;
 use ferricord_model::gateway::GatewayEvent;
 use ferricord_model::id::GuildId;
@@ -42,6 +43,14 @@ use crate::models::{PyChannel, PyGuild, PyMessage, PyUser};
 ///
 ///     client.run("YOUR_BOT_TOKEN")
 ///     ```
+/// Slash command definition for registration.
+#[derive(Clone)]
+struct SlashCommandDef {
+    name: String,
+    description: String,
+    guild_id: Option<u64>,
+}
+
 #[pyclass]
 pub struct Client {
     /// Gateway intents.
@@ -50,6 +59,8 @@ pub struct Client {
     event_handlers: Arc<RwLock<HashMap<String, PyObject>>>,
     /// Slash command handlers (command_name -> handler).
     slash_command_handlers: Arc<RwLock<HashMap<String, PyObject>>>,
+    /// Slash command definitions for registration.
+    slash_command_defs: Arc<RwLock<Vec<SlashCommandDef>>>,
     /// Component handlers (custom_id -> handler).
     component_handlers: Arc<RwLock<HashMap<String, PyObject>>>,
     /// Modal handlers (custom_id -> handler).
@@ -81,6 +92,7 @@ impl Client {
             intents,
             event_handlers: Arc::new(RwLock::new(HashMap::new())),
             slash_command_handlers: Arc::new(RwLock::new(HashMap::new())),
+            slash_command_defs: Arc::new(RwLock::new(Vec::new())),
             component_handlers: Arc::new(RwLock::new(HashMap::new())),
             modal_handlers: Arc::new(RwLock::new(HashMap::new())),
             http: Arc::new(RwLock::new(None)),
@@ -883,11 +895,25 @@ impl Client {
             None => None,
         };
         let handlers = self.slash_command_handlers.clone();
+        let defs = self.slash_command_defs.clone();
         let name_clone = name.clone();
+        let description_clone = description.clone();
+        let guild_id_clone = guild_id;
 
-        // Store command metadata for registration on ready
-        let _description = description;
-        let _guild_id = guild_id;
+        // Store command definition for sync_commands()
+        let cmd_def = SlashCommandDef {
+            name: name.clone(),
+            description,
+            guild_id,
+        };
+        if let Ok(mut guard) = defs.try_write() {
+            guard.push(cmd_def);
+        } else {
+            let defs_spawn = defs.clone();
+            pyo3_async_runtimes::tokio::get_runtime().spawn(async move {
+                defs_spawn.write().await.push(cmd_def);
+            });
+        }
 
         // Return a decorator function
         let decorator = pyo3::types::PyCFunction::new_closure(
@@ -903,6 +929,10 @@ impl Client {
 
                 let handlers_clone = handlers.clone();
                 let name_for_insert = name_clone.clone();
+
+                // Suppress unused variable warnings
+                let _ = &description_clone;
+                let _ = &guild_id_clone;
 
                 // Register the handler
                 if let Ok(mut guard) = handlers_clone.try_write() {
@@ -923,6 +953,114 @@ impl Client {
         )?;
 
         Ok(decorator.into())
+    }
+
+    /// Sync slash commands with Discord.
+    ///
+    /// This registers all decorated slash commands with Discord's API.
+    /// Call this in your on_ready handler.
+    ///
+    /// Args:
+    ///     guild_id: Optional guild ID to sync commands to (for guild-specific commands).
+    ///               If None, syncs global commands.
+    ///
+    /// Example:
+    ///     ```python
+    ///     @client.event
+    ///     async def on_ready():
+    ///         await client.sync_commands()  # Global commands
+    ///         # or
+    ///         await client.sync_commands(guild_id=123456789)  # Guild commands
+    ///     ```
+    #[pyo3(signature = (guild_id=None))]
+    fn sync_commands<'py>(
+        &self,
+        py: Python<'py>,
+        guild_id: Option<&pyo3::Bound<'_, pyo3::PyAny>>,
+    ) -> PyResult<Bound<'py, pyo3::PyAny>> {
+        // Convert guild_id from string or int to Option<u64>
+        let guild_id: Option<u64> = match guild_id {
+            Some(val) => {
+                if let Ok(id) = val.extract::<u64>() {
+                    Some(id)
+                } else if let Ok(id_str) = val.extract::<String>() {
+                    id_str.parse::<u64>().ok()
+                } else {
+                    None
+                }
+            }
+            None => None,
+        };
+
+        let http = self.http.clone();
+        let app_id = self.application_id.clone();
+        let defs = self.slash_command_defs.clone();
+
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let http_guard = http.read().await;
+            let http = http_guard
+                .as_ref()
+                .ok_or_else(|| {
+                    pyo3::exceptions::PyRuntimeError::new_err(
+                        "Client not connected. Call sync_commands() after on_ready.",
+                    )
+                })?
+                .clone();
+
+            let app_id = app_id.read().await.ok_or_else(|| {
+                pyo3::exceptions::PyRuntimeError::new_err(
+                    "Application ID not available. Call sync_commands() after on_ready.",
+                )
+            })?;
+
+            let defs_guard = defs.read().await;
+
+            // Filter commands by guild_id
+            let commands_to_sync: Vec<_> = defs_guard
+                .iter()
+                .filter(|cmd| {
+                    if let Some(target_guild) = guild_id {
+                        // Sync guild-specific commands
+                        cmd.guild_id == Some(target_guild)
+                    } else {
+                        // Sync global commands (those without guild_id)
+                        cmd.guild_id.is_none()
+                    }
+                })
+                .map(|cmd| CreateApplicationCommand {
+                    name: cmd.name.clone(),
+                    description: cmd.description.clone(),
+                    kind: Some(ferricord_model::interaction::ApplicationCommandType::ChatInput),
+                    options: vec![],
+                    default_member_permissions: None,
+                    dm_permission: None,
+                    nsfw: false,
+                })
+                .collect();
+
+            let count = commands_to_sync.len();
+
+            if let Some(guild_id) = guild_id {
+                http.bulk_overwrite_guild_commands(
+                    ferricord_model::UserId::new(app_id),
+                    ferricord_model::GuildId::new(guild_id),
+                    &commands_to_sync,
+                )
+                .await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+                info!("Synced {} guild commands to guild {}", count, guild_id);
+            } else {
+                http.bulk_overwrite_global_commands(
+                    ferricord_model::UserId::new(app_id),
+                    &commands_to_sync,
+                )
+                .await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+                info!("Synced {} global commands", count);
+            }
+
+            Ok(count)
+        })
     }
 
     /// Register a component handler (button, select menu).

@@ -629,6 +629,21 @@ async def on_ready():
     print("BOT IS READY!")
     print("=" * 60)
     
+    # Sync slash commands with Discord (discord.py style!)
+    # This registers all @client.slash_command decorated functions
+    try:
+        # For development, sync to a specific guild (instant updates)
+        guild_id = os.environ.get("DISCORD_GUILD_ID")
+        if guild_id:
+            count = await client.sync_commands(guild_id=guild_id)
+            print(f"[Slash Commands] Synced {count} commands to guild {guild_id}")
+        else:
+            # For production, sync globally (may take up to 1 hour to propagate)
+            count = await client.sync_commands()
+            print(f"[Slash Commands] Synced {count} global commands")
+    except Exception as e:
+        print(f"[Slash Commands] Failed to sync: {e}")
+    
     # Access bot user information
     user = client.user
     if user:
@@ -1081,6 +1096,7 @@ def main():
     print("  - Fetch channel/user (client.fetch_channel, client.fetch_user)")
     print("  - Create DM (client.create_dm)")
     print("  - Slash command decorators (@client.slash_command)")
+    print("  - Slash command sync (await client.sync_commands()) - discord.py style!")
     print("  - Component decorators (@client.component)")
     print("  - Modal decorators (@client.modal)")
     print("  - Cogs system (client.load_cog, client.unload_cog)")
@@ -1094,15 +1110,9 @@ def main():
     try:
         token = get_token()
         
-        # Register slash commands with Discord API
-        # Set DISCORD_APPLICATION_ID and optionally DISCORD_GUILD_ID in .env
-        try:
-            app_id = get_application_id()
-            guild_id = os.environ.get("DISCORD_GUILD_ID")  # Optional: for faster dev iteration
-            register_slash_commands(token, app_id, guild_id)
-        except ValueError as e:
-            print(f"[Slash Commands] Skipping registration: {e}")
-            print("[Slash Commands] Set DISCORD_APPLICATION_ID to enable slash command registration")
+        # Slash commands are now registered automatically in on_ready()
+        # using client.sync_commands() - discord.py style!
+        # Set DISCORD_GUILD_ID in .env for faster dev iteration (guild commands update instantly)
         
         print("\n[Starting] Connecting to Discord...")
         
