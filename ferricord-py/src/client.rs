@@ -138,6 +138,27 @@ impl Client {
         let error_holder: Arc<RwLock<Option<String>>> = Arc::new(RwLock::new(None));
         let error_holder_clone = error_holder.clone();
 
+        // Use a flag to signal shutdown from signal checker
+        let shutdown_flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let shutdown_flag_clone = shutdown_flag.clone();
+
+        // Spawn a thread to periodically check Python signals (Ctrl+C)
+        // This is necessary because tokio::signal::ctrl_c() doesn't work well
+        // when Python has already registered its own signal handler
+        let signal_thread = std::thread::spawn(move || {
+            while !shutdown_flag_clone.load(std::sync::atomic::Ordering::Relaxed) {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                // Check if Python received a signal (like SIGINT from Ctrl+C)
+                let got_signal = Python::with_gil(|py| py.check_signals().is_err());
+                if got_signal {
+                    shutdown_flag_clone.store(true, std::sync::atomic::Ordering::Relaxed);
+                    break;
+                }
+            }
+        });
+
+        let shutdown_flag_async = shutdown_flag.clone();
+
         py.allow_threads(|| {
             pyo3_async_runtimes::tokio::get_runtime().block_on(async move {
                 *running.write().await = true;
@@ -195,13 +216,18 @@ impl Client {
                 let mut shard_handle = std::pin::pin!(shard_handle);
                 let mut got_sigint = false;
 
+                // Create an interval for checking the shutdown flag
+                let mut signal_check_interval = tokio::time::interval(std::time::Duration::from_millis(100));
+
                 while *running.read().await {
                     tokio::select! {
-                        // Handle Ctrl+C (SIGINT)
-                        _ = tokio::signal::ctrl_c() => {
-                            info!("Received Ctrl+C, shutting down...");
-                            got_sigint = true;
-                            break;
+                        // Check if signal thread detected Ctrl+C
+                        _ = signal_check_interval.tick() => {
+                            if shutdown_flag_async.load(std::sync::atomic::Ordering::Relaxed) {
+                                info!("Received Ctrl+C, shutting down...");
+                                got_sigint = true;
+                                break;
+                            }
                         }
                         // Wait for shard task to complete (error or normal disconnect)
                         result = &mut shard_handle => {
@@ -229,6 +255,10 @@ impl Client {
                 }
             });
         });
+
+        // Signal the signal thread to stop and wait for it
+        shutdown_flag.store(true, std::sync::atomic::Ordering::Relaxed);
+        let _ = signal_thread.join();
 
         if let Some(err) = pyo3_async_runtimes::tokio::get_runtime()
             .block_on(async { error_holder.read().await.clone() })
