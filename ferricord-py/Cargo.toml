@@ -1,0 +1,27 @@
+[package]
+name = "ferricord-py"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Python bindings for Ferricord"
+
+[lib]
+name = "ferricord"
+crate-type = ["cdylib"]
+
+[dependencies]
+ferricord-core.workspace = true
+ferricord-model.workspace = true
+ferricord-http.workspace = true
+ferricord-gateway.workspace = true
+ferricord-cache.workspace = true
+pyo3.workspace = true
+pyo3-async-runtimes.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

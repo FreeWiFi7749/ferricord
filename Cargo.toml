@@ -1,0 +1,70 @@
+[workspace]
+resolver = "2"
+members = [
+    "ferricord-core",
+    "ferricord-model",
+    "ferricord-http",
+    "ferricord-gateway",
+    "ferricord-cache",
+    "ferricord-voice",
+    "ferricord-py",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+license = "MIT"
+repository = "https://github.com/FreeWiFi7749/ferricord"
+authors = ["HFS Development Team"]
+
+[workspace.dependencies]
+# Internal crates
+ferricord-core = { path = "ferricord-core" }
+ferricord-model = { path = "ferricord-model" }
+ferricord-http = { path = "ferricord-http" }
+ferricord-gateway = { path = "ferricord-gateway" }
+ferricord-cache = { path = "ferricord-cache" }
+ferricord-voice = { path = "ferricord-voice" }
+
+# Async runtime
+tokio = { version = "1.43", features = ["full"] }
+tokio-tungstenite = { version = "0.21", features = ["native-tls"] }
+
+# HTTP
+reqwest = { version = "0.11", features = ["json", "rustls-tls"] }
+hyper = { version = "1.0", features = ["full"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_repr = "0.1"
+
+# Python bindings
+pyo3 = { version = "0.23", features = ["extension-module", "abi3-py311"] }
+pyo3-async-runtimes = { version = "0.23", features = ["tokio-runtime"] }
+
+# Random number generation
+rand = "0.9"
+
+# Utilities
+bitflags = "2.4"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+thiserror = "1.0"
+dashmap = "5.5"
+lru = "0.12"
+parking_lot = "0.12"
+url = "2.5"
+percent-encoding = "2.3"
+futures = "0.3"
+async-trait = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+flate2 = "1.0"
+
+[profile.release]
+# Use thin LTO and parallel codegen for faster development iteration.
+# For production release, change to: lto = true, codegen-units = 1
+lto = "thin"
+codegen-units = 16
+opt-level = 3

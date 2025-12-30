@@ -1,0 +1,24 @@
+[package]
+name = "ferricord-gateway"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Discord Gateway WebSocket client for Ferricord"
+
+[dependencies]
+ferricord-core.workspace = true
+ferricord-model.workspace = true
+ferricord-http.workspace = true
+tokio.workspace = true
+tokio-tungstenite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+futures.workspace = true
+flate2.workspace = true
+url.workspace = true
+async-trait.workspace = true
+rand.workspace = true

@@ -1,0 +1,17 @@
+[package]
+name = "ferricord-cache"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Cache layer for Ferricord"
+
+[dependencies]
+ferricord-core.workspace = true
+ferricord-model.workspace = true
+dashmap.workspace = true
+lru.workspace = true
+parking_lot.workspace = true
+tracing.workspace = true

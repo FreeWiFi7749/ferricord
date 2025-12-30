@@ -1,0 +1,64 @@
+[build-system]
+requires = ["maturin>=1.4,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "ferricord"
+version = "0.1.0"
+description = "A high-performance Discord API wrapper for Python, powered by Rust"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [
+    { name = "HFS Development Team" },
+    { name = "FreeWiFi7749", email = "freewifi110@outlook.jp" }
+]
+keywords = ["discord", "api", "bot", "rust", "async"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Rust",
+    "Topic :: Communications :: Chat",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Framework :: AsyncIO",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://github.com/FreeWiFi7749/ferricord"
+Repository = "https://github.com/FreeWiFi7749/ferricord"
+Documentation = "https://github.com/FreeWiFi7749/ferricord#readme"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "mypy>=1.0",
+    "ruff>=0.1",
+]
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+module-name = "ferricord"
+manifest-path = "ferricord-py/Cargo.toml"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "ANN", "B", "C4", "SIM"]
+ignore = ["ANN101", "ANN102"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true

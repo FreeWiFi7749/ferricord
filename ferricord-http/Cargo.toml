@@ -1,0 +1,22 @@
+[package]
+name = "ferricord-http"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Discord REST API client for Ferricord"
+
+[dependencies]
+ferricord-core.workspace = true
+ferricord-model.workspace = true
+tokio.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+url.workspace = true
+percent-encoding.workspace = true
+parking_lot.workspace = true
+dashmap.workspace = true
