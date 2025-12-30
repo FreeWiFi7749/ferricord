@@ -2,10 +2,9 @@
 //!
 //! This module handles the low-level WebSocket connection to the Discord Gateway.
 
-use std::io::Read;
 use std::sync::Arc;
 
-use flate2::read::ZlibDecoder;
+use flate2::{Decompress, FlushDecompress};
 use futures::stream::{SplitSink, SplitStream};
 use futures::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
@@ -18,6 +17,8 @@ use ferricord_core::{Error, Result};
 use ferricord_model::gateway::GatewayPayload;
 
 const MAX_ZLIB_BUFFER_SIZE: usize = 10 * 1024 * 1024;
+/// Zlib flush suffix that indicates end of a message
+const ZLIB_SUFFIX: [u8; 4] = [0x00, 0x00, 0xff, 0xff];
 
 /// Type alias for the WebSocket stream.
 pub type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
@@ -45,8 +46,12 @@ pub struct GatewayConnection {
     receiver: Arc<Mutex<Option<SplitStream<WsStream>>>>,
     /// Current connection state.
     state: Arc<Mutex<ConnectionState>>,
-    /// Zlib decompression buffer.
+    /// Zlib decompression buffer (accumulates compressed data until flush suffix).
     zlib_buffer: Arc<Mutex<Vec<u8>>>,
+    /// Persistent zlib decompressor that maintains state across messages.
+    /// Discord's zlib-stream is stateful - the compressor keeps its dictionary
+    /// across payloads and only inserts Z_SYNC_FLUSH markers between messages.
+    decompressor: Arc<Mutex<Decompress>>,
 }
 
 impl GatewayConnection {
@@ -57,6 +62,8 @@ impl GatewayConnection {
             receiver: Arc::new(Mutex::new(None)),
             state: Arc::new(Mutex::new(ConnectionState::Disconnected)),
             zlib_buffer: Arc::new(Mutex::new(Vec::new())),
+            // Initialize decompressor with zlib header expected (true)
+            decompressor: Arc::new(Mutex::new(Decompress::new(true))),
         }
     }
 
@@ -64,7 +71,9 @@ impl GatewayConnection {
     pub async fn connect(&self, url: &str) -> Result<()> {
         *self.state.lock().await = ConnectionState::Connecting;
 
+        // Reset zlib state for new connection - Discord starts a fresh zlib stream
         self.zlib_buffer.lock().await.clear();
+        self.decompressor.lock().await.reset(true);
 
         // Build the gateway URL with proper path and query parameters
         // Discord expects: wss://gateway.discord.gg/?v=10&encoding=json&compress=zlib-stream
@@ -163,6 +172,7 @@ impl GatewayConnection {
 
                 if buffer.len() + data.len() > MAX_ZLIB_BUFFER_SIZE {
                     buffer.clear();
+                    self.decompressor.lock().await.reset(true);
                     return Err(Error::websocket(format!(
                         "Zlib buffer exceeded maximum size of {} bytes",
                         MAX_ZLIB_BUFFER_SIZE
@@ -171,23 +181,41 @@ impl GatewayConnection {
 
                 buffer.extend_from_slice(&data);
 
-                if data.len() >= 4 && data[data.len() - 4..] == [0x00, 0x00, 0xff, 0xff] {
-                    let mut decoder = ZlibDecoder::new(&buffer[..]);
-                    let mut decompressed = String::new();
+                // Check if the accumulated buffer ends with the zlib flush suffix
+                // The suffix can be split across frames, so check the buffer not just the frame
+                if buffer.len() >= 4 && buffer[buffer.len() - 4..] == ZLIB_SUFFIX {
+                    let mut decompressor = self.decompressor.lock().await;
 
-                    match decoder.read_to_string(&mut decompressed) {
-                        Ok(_) => {
+                    // Pre-allocate output buffer - Discord payloads typically decompress to ~10x size
+                    let mut output = Vec::with_capacity(buffer.len() * 10);
+
+                    // Use decompress_vec with SyncFlush to decompress incrementally
+                    // This maintains the decompressor state (dictionary) across messages
+                    match decompressor.decompress_vec(&buffer, &mut output, FlushDecompress::Sync) {
+                        Ok(_status) => {
+                            // Clear input buffer but keep decompressor state
                             buffer.clear();
+
+                            let decompressed = String::from_utf8(output).map_err(|e| {
+                                Error::websocket(format!(
+                                    "Invalid UTF-8 in decompressed data: {}",
+                                    e
+                                ))
+                            })?;
+
                             trace!("Received binary (decompressed): {}", decompressed);
                             let payload: GatewayPayload = serde_json::from_str(&decompressed)?;
                             Ok(Some(payload))
                         }
                         Err(e) => {
+                            // On decompression error, reset both buffer and decompressor
                             buffer.clear();
+                            decompressor.reset(true);
                             Err(Error::websocket(format!("Decompression failed: {}", e)))
                         }
                     }
                 } else {
+                    // Not a complete message yet, wait for more data
                     Ok(None)
                 }
             }
