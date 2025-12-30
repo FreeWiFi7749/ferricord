@@ -217,7 +217,8 @@ impl Client {
                 let mut got_sigint = false;
 
                 // Create an interval for checking the shutdown flag
-                let mut signal_check_interval = tokio::time::interval(std::time::Duration::from_millis(100));
+                let mut signal_check_interval =
+                    tokio::time::interval(std::time::Duration::from_millis(100));
 
                 while *running.read().await {
                     tokio::select! {
