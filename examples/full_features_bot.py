@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
-Ferricord Phase 1 Full Features Example Bot
+Ferricord Phase 1 & 2 Full Features Example Bot
 
-This example demonstrates ALL Phase 1 features of Ferricord:
+This example demonstrates ALL Phase 1 & 2 features of Ferricord:
 - Client initialization with custom Intents
 - All available event handlers
 - Cache access methods
 - Model properties and methods
-
-Note: Phase 1 is receive-only. Message sending will be available in Phase 2.
+- Message sending, editing, deleting (Phase 2)
+- Reactions (Phase 2)
+- Typing indicator (Phase 2)
 
 IMPORTANT - Discord Developer Portal Setup:
 ===========================================
@@ -234,19 +235,60 @@ async def on_message(message):
     print(f"  Type: {message.type}")
     print(f"  Jump URL: {message.jump_url()}")
     
-    # Example command handling (Phase 1: receive only, no response)
+    # Example command handling (Phase 2: can now send messages!)
     if message.content.startswith("!"):
         command = message.content[1:].split()[0].lower()
         print(f"  [Command Detected: !{command}]")
         
         if command == "ping":
-            print("    -> Would respond with 'Pong!' (Phase 2)")
+            # Send a message (Phase 2 feature!)
+            response = await client.send_message(message.channel_id, "Pong!")
+            print(f"    -> Sent response: {response.id}")
         elif command == "info":
-            print("    -> Would respond with bot info (Phase 2)")
+            # Send bot info
+            user = client.user
+            info_text = f"Bot: {user.tag() if user else 'Unknown'}\nGuilds: {client.guild_count}"
+            await client.send_message(message.channel_id, info_text)
+            print("    -> Sent bot info")
         elif command == "guilds":
+            await client.send_message(message.channel_id, f"I'm in {client.guild_count} guilds!")
             print(f"    -> Bot is in {client.guild_count} guilds")
         elif command == "cache":
+            await client.send_message(message.channel_id, f"Cache: {client.cache_stats()}")
             print(f"    -> Cache stats: {client.cache_stats()}")
+        elif command == "typing":
+            # Trigger typing indicator (Phase 2 feature!)
+            await client.trigger_typing(message.channel_id)
+            print("    -> Triggered typing indicator")
+        elif command == "react":
+            # Add a reaction to the user's message (Phase 2 feature!)
+            await client.add_reaction(message.channel_id, message.id, "👍")
+            print("    -> Added reaction")
+        elif command == "edit":
+            # Send and then edit a message (Phase 2 feature!)
+            sent = await client.send_message(message.channel_id, "Original message...")
+            await asyncio.sleep(1)
+            edited = await client.edit_message(message.channel_id, sent.id, "Edited message!")
+            print(f"    -> Sent and edited message: {edited.id}")
+        elif command == "delete":
+            # Send and then delete a message (Phase 2 feature!)
+            sent = await client.send_message(message.channel_id, "This message will be deleted...")
+            await asyncio.sleep(2)
+            await client.delete_message(message.channel_id, sent.id)
+            print("    -> Sent and deleted message")
+        elif command == "help":
+            help_text = """**Available Commands:**
+!ping - Test bot responsiveness
+!info - Show bot information
+!guilds - Show guild count
+!cache - Show cache statistics
+!typing - Trigger typing indicator
+!react - Add a reaction to your message
+!edit - Demo message editing
+!delete - Demo message deletion
+!help - Show this help message"""
+            await client.send_message(message.channel_id, help_text)
+            print("    -> Sent help message")
 
 
 @client.event
@@ -430,18 +472,26 @@ async def on_resumed():
 def main():
     """Main entry point for the bot."""
     print("\n" + "=" * 60)
-    print("FERRICORD PHASE 1 - FULL FEATURES EXAMPLE")
+    print("FERRICORD PHASE 1 & 2 - FULL FEATURES EXAMPLE")
     print("=" * 60)
     print("\nPhase 1 Features:")
     print("  - Gateway connection (single shard)")
     print("  - Event receiving (all events listed above)")
     print("  - Cache (guilds, channels, users, messages)")
     print("  - Intents configuration")
-    print("\nNot Yet Available (Phase 2+):")
-    print("  - Message sending")
+    print("\nPhase 2 Features (NEW!):")
+    print("  - Message sending (client.send_message)")
+    print("  - Message editing (client.edit_message)")
+    print("  - Message deleting (client.delete_message)")
+    print("  - Reactions (client.add_reaction, client.remove_reaction)")
+    print("  - Typing indicator (client.trigger_typing)")
+    print("  - Fetch channel/user (client.fetch_channel, client.fetch_user)")
+    print("  - Create DM (client.create_dm)")
+    print("\nNot Yet Available (Phase 3+):")
     print("  - Slash commands")
     print("  - Multi-shard support")
     print("  - Voice connections")
+    print("  - Cogs system")
     print("=" * 60 + "\n")
     
     try:

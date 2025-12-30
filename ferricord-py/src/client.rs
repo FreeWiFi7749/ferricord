@@ -124,6 +124,7 @@ impl Client {
         let event_handlers = self.event_handlers.clone();
         let cache = self.cache.clone();
         let running = self.running.clone();
+        let http_client = self.http.clone();
         let error_holder: Arc<RwLock<Option<String>>> = Arc::new(RwLock::new(None));
         let error_holder_clone = error_holder.clone();
 
@@ -140,6 +141,9 @@ impl Client {
                         return;
                     }
                 };
+
+                // Store HTTP client for REST API operations
+                *http_client.write().await = Some(http.clone());
 
                 let gateway_info = match http.get_gateway_bot().await {
                     Ok(info) => info,
@@ -243,6 +247,7 @@ impl Client {
         let cache = self.cache.clone();
         let running = self.running.clone();
         let task_handles = self.task_handles.clone();
+        let http_client = self.http.clone();
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             *running.write().await = true;
@@ -250,6 +255,9 @@ impl Client {
             let http = HttpClient::new(&token)
                 .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
             let http = Arc::new(http);
+
+            // Store HTTP client for REST API operations
+            *http_client.write().await = Some(http.clone());
 
             let gateway_info = http
                 .get_gateway_bot()
@@ -367,6 +375,284 @@ impl Client {
     /// Get cache statistics.
     fn cache_stats(&self) -> String {
         self.cache.stats().to_string()
+    }
+
+    // ========== REST API Methods (Phase 2) ==========
+
+    /// Send a message to a channel.
+    ///
+    /// Args:
+    ///     channel_id: The ID of the channel to send the message to.
+    ///     content: The message content.
+    ///
+    /// Returns:
+    ///     The sent message.
+    fn send_message<'py>(
+        &self,
+        py: Python<'py>,
+        channel_id: u64,
+        content: String,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let http = self.http.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let http_guard = http.read().await;
+            let http = http_guard.as_ref().ok_or_else(|| {
+                pyo3::exceptions::PyRuntimeError::new_err("Client is not connected")
+            })?;
+
+            let message = http
+                .send_message(ferricord_model::ChannelId::new(channel_id), content)
+                .await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+            Python::with_gil(|py| {
+                PyMessage::new(message)
+                    .into_pyobject(py)
+                    .map(|o| o.into_any().unbind())
+            })
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("{:?}", e)))
+        })
+    }
+
+    /// Edit a message.
+    ///
+    /// Args:
+    ///     channel_id: The ID of the channel the message is in.
+    ///     message_id: The ID of the message to edit.
+    ///     content: The new message content.
+    ///
+    /// Returns:
+    ///     The edited message.
+    fn edit_message<'py>(
+        &self,
+        py: Python<'py>,
+        channel_id: u64,
+        message_id: u64,
+        content: String,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let http = self.http.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let http_guard = http.read().await;
+            let http = http_guard.as_ref().ok_or_else(|| {
+                pyo3::exceptions::PyRuntimeError::new_err("Client is not connected")
+            })?;
+
+            let message = http
+                .edit_message(
+                    ferricord_model::ChannelId::new(channel_id),
+                    ferricord_model::MessageId::new(message_id),
+                    content,
+                )
+                .await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+            Python::with_gil(|py| {
+                PyMessage::new(message)
+                    .into_pyobject(py)
+                    .map(|o| o.into_any().unbind())
+            })
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("{:?}", e)))
+        })
+    }
+
+    /// Delete a message.
+    ///
+    /// Args:
+    ///     channel_id: The ID of the channel the message is in.
+    ///     message_id: The ID of the message to delete.
+    fn delete_message<'py>(
+        &self,
+        py: Python<'py>,
+        channel_id: u64,
+        message_id: u64,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let http = self.http.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let http_guard = http.read().await;
+            let http = http_guard.as_ref().ok_or_else(|| {
+                pyo3::exceptions::PyRuntimeError::new_err("Client is not connected")
+            })?;
+
+            http.delete_message(
+                ferricord_model::ChannelId::new(channel_id),
+                ferricord_model::MessageId::new(message_id),
+            )
+            .await
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+            Ok(Python::with_gil(|py| py.None()))
+        })
+    }
+
+    /// Add a reaction to a message.
+    ///
+    /// Args:
+    ///     channel_id: The ID of the channel the message is in.
+    ///     message_id: The ID of the message to react to.
+    ///     emoji: The emoji to react with (e.g., "👍" or "custom:123456789").
+    fn add_reaction<'py>(
+        &self,
+        py: Python<'py>,
+        channel_id: u64,
+        message_id: u64,
+        emoji: String,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let http = self.http.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let http_guard = http.read().await;
+            let http = http_guard.as_ref().ok_or_else(|| {
+                pyo3::exceptions::PyRuntimeError::new_err("Client is not connected")
+            })?;
+
+            http.add_reaction(
+                ferricord_model::ChannelId::new(channel_id),
+                ferricord_model::MessageId::new(message_id),
+                &emoji,
+            )
+            .await
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+            Ok(Python::with_gil(|py| py.None()))
+        })
+    }
+
+    /// Remove own reaction from a message.
+    ///
+    /// Args:
+    ///     channel_id: The ID of the channel the message is in.
+    ///     message_id: The ID of the message to remove reaction from.
+    ///     emoji: The emoji to remove.
+    fn remove_reaction<'py>(
+        &self,
+        py: Python<'py>,
+        channel_id: u64,
+        message_id: u64,
+        emoji: String,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let http = self.http.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let http_guard = http.read().await;
+            let http = http_guard.as_ref().ok_or_else(|| {
+                pyo3::exceptions::PyRuntimeError::new_err("Client is not connected")
+            })?;
+
+            http.remove_own_reaction(
+                ferricord_model::ChannelId::new(channel_id),
+                ferricord_model::MessageId::new(message_id),
+                &emoji,
+            )
+            .await
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+            Ok(Python::with_gil(|py| py.None()))
+        })
+    }
+
+    /// Trigger typing indicator in a channel.
+    ///
+    /// Args:
+    ///     channel_id: The ID of the channel to show typing in.
+    fn trigger_typing<'py>(&self, py: Python<'py>, channel_id: u64) -> PyResult<Bound<'py, PyAny>> {
+        let http = self.http.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let http_guard = http.read().await;
+            let http = http_guard.as_ref().ok_or_else(|| {
+                pyo3::exceptions::PyRuntimeError::new_err("Client is not connected")
+            })?;
+
+            http.trigger_typing(ferricord_model::ChannelId::new(channel_id))
+                .await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+            Ok(Python::with_gil(|py| py.None()))
+        })
+    }
+
+    /// Get a channel by ID.
+    ///
+    /// Args:
+    ///     channel_id: The ID of the channel to get.
+    ///
+    /// Returns:
+    ///     The channel.
+    fn fetch_channel<'py>(&self, py: Python<'py>, channel_id: u64) -> PyResult<Bound<'py, PyAny>> {
+        let http = self.http.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let http_guard = http.read().await;
+            let http = http_guard.as_ref().ok_or_else(|| {
+                pyo3::exceptions::PyRuntimeError::new_err("Client is not connected")
+            })?;
+
+            let channel = http
+                .get_channel(ferricord_model::ChannelId::new(channel_id))
+                .await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+            Python::with_gil(|py| {
+                PyChannel::new(channel)
+                    .into_pyobject(py)
+                    .map(|o| o.into_any().unbind())
+            })
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("{:?}", e)))
+        })
+    }
+
+    /// Get a user by ID.
+    ///
+    /// Args:
+    ///     user_id: The ID of the user to get.
+    ///
+    /// Returns:
+    ///     The user.
+    fn fetch_user<'py>(&self, py: Python<'py>, user_id: u64) -> PyResult<Bound<'py, PyAny>> {
+        let http = self.http.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let http_guard = http.read().await;
+            let http = http_guard.as_ref().ok_or_else(|| {
+                pyo3::exceptions::PyRuntimeError::new_err("Client is not connected")
+            })?;
+
+            let user = http
+                .get_user(ferricord_model::UserId::new(user_id))
+                .await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+            Python::with_gil(|py| {
+                PyUser::new(user)
+                    .into_pyobject(py)
+                    .map(|o| o.into_any().unbind())
+            })
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("{:?}", e)))
+        })
+    }
+
+    /// Create a DM channel with a user.
+    ///
+    /// Args:
+    ///     user_id: The ID of the user to create a DM with.
+    ///
+    /// Returns:
+    ///     The DM channel.
+    fn create_dm<'py>(&self, py: Python<'py>, user_id: u64) -> PyResult<Bound<'py, PyAny>> {
+        let http = self.http.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let http_guard = http.read().await;
+            let http = http_guard.as_ref().ok_or_else(|| {
+                pyo3::exceptions::PyRuntimeError::new_err("Client is not connected")
+            })?;
+
+            let channel = http
+                .create_dm(ferricord_model::UserId::new(user_id))
+                .await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+            Python::with_gil(|py| {
+                PyChannel::new(channel)
+                    .into_pyobject(py)
+                    .map(|o| o.into_any().unbind())
+            })
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("{:?}", e)))
+        })
     }
 
     fn __repr__(&self) -> String {
