@@ -66,8 +66,22 @@ impl GatewayConnection {
 
         self.zlib_buffer.lock().await.clear();
 
-        let gateway_url = format!("{}?v=10&encoding=json&compress=zlib-stream", url);
-        debug!("Connecting to gateway: {}", gateway_url);
+        // Build the gateway URL with proper path and query parameters
+        // Discord expects: wss://gateway.discord.gg/?v=10&encoding=json&compress=zlib-stream
+        // The URL from Discord API may not have a trailing slash, so we need to ensure
+        // the path is "/" before adding query parameters
+        let gateway_url = if url.contains('?') {
+            // URL already has query params, append with &
+            format!("{}&v=10&encoding=json&compress=zlib-stream", url)
+        } else if url.ends_with('/') {
+            // URL has trailing slash, just add query params
+            format!("{}?v=10&encoding=json&compress=zlib-stream", url)
+        } else {
+            // URL has no trailing slash, add / before query params
+            format!("{}/?v=10&encoding=json&compress=zlib-stream", url)
+        };
+
+        tracing::info!("Connecting to gateway: {}", gateway_url);
 
         let (ws_stream, _) = connect_async(&gateway_url)
             .await
