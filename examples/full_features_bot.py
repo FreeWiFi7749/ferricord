@@ -10,6 +10,12 @@ This example demonstrates ALL Phase 1 & 2 features of Ferricord:
 - Message sending, editing, deleting (Phase 2)
 - Reactions (Phase 2)
 - Typing indicator (Phase 2)
+- Slash command decorators (Phase 2)
+- Component decorators (Phase 2)
+- Modal decorators (Phase 2)
+- Cogs system (Phase 2)
+- Metrics/monitoring (Phase 2)
+- AutoShardedClient (Phase 2)
 
 IMPORTANT - Discord Developer Portal Setup:
 ===========================================
@@ -40,7 +46,7 @@ import asyncio
 from datetime import datetime
 
 # Import Ferricord components
-from ferricord import Client, Intents
+from ferricord import Client, Intents, AutoShardedClient
 
 # =============================================================================
 # Configuration
@@ -114,6 +120,53 @@ def create_intents() -> Intents:
 
 intents = create_intents()
 client = Client(intents=intents)
+
+# =============================================================================
+# Cogs System Example (Phase 2)
+# =============================================================================
+
+class ModerationCog:
+    """
+    Example Cog for moderation commands.
+    
+    Cogs are a way to organize your bot's commands and event handlers.
+    Methods starting with 'on_' are automatically registered as event handlers
+    when the cog is loaded.
+    
+    Usage:
+        cog = ModerationCog()
+        client.load_cog(cog)
+    """
+    
+    async def on_message(self, message):
+        """Handle messages for moderation purposes."""
+        if message.author.bot:
+            return
+        
+        # Example: Auto-moderate messages containing banned words
+        banned_words = ["spam", "scam"]
+        content_lower = message.content.lower()
+        
+        for word in banned_words:
+            if word in content_lower:
+                print(f"[ModerationCog] Detected banned word '{word}' in message from {message.author.username}")
+                # In a real bot, you might delete the message or warn the user
+                break
+    
+    async def on_member_join(self, guild_id):
+        """Welcome new members."""
+        print(f"[ModerationCog] New member joined guild {guild_id}")
+
+
+class UtilityCog:
+    """
+    Example Cog for utility commands.
+    """
+    
+    async def on_ready(self):
+        """Called when the bot is ready."""
+        print("[UtilityCog] Utility cog is ready!")
+
 
 # =============================================================================
 # Event Handlers - All Phase 1 Events
@@ -276,12 +329,27 @@ async def on_message(message):
             await asyncio.sleep(2)
             await client.delete_message(message.channel_id, sent.id)
             print("    -> Sent and deleted message")
+        elif command == "metrics":
+            # Get client metrics (Phase 2 feature!)
+            metrics = client.get_metrics()
+            metrics_text = f"""**Bot Metrics:**
+Guilds: {metrics.get('guilds', 0)}
+Channels: {metrics.get('channels', 0)}
+Users: {metrics.get('users', 0)}
+Messages: {metrics.get('messages', 0)}
+Members: {metrics.get('members', 0)}
+Event Handlers: {metrics.get('event_handlers', 0)}
+Slash Commands: {metrics.get('slash_commands', 0)}
+Running: {metrics.get('running', False)}"""
+            await client.send_message(message.channel_id, metrics_text)
+            print(f"    -> Sent metrics: {metrics}")
         elif command == "help":
             help_text = """**Available Commands:**
 !ping - Test bot responsiveness
 !info - Show bot information
 !guilds - Show guild count
 !cache - Show cache statistics
+!metrics - Show bot metrics (Phase 2)
 !typing - Trigger typing indicator
 !react - Add a reaction to your message
 !edit - Demo message editing
@@ -487,11 +555,15 @@ def main():
     print("  - Typing indicator (client.trigger_typing)")
     print("  - Fetch channel/user (client.fetch_channel, client.fetch_user)")
     print("  - Create DM (client.create_dm)")
+    print("  - Slash command decorators (@client.slash_command)")
+    print("  - Component decorators (@client.component)")
+    print("  - Modal decorators (@client.modal)")
+    print("  - Cogs system (client.load_cog, client.unload_cog)")
+    print("  - Metrics/monitoring (client.get_metrics)")
+    print("  - AutoShardedClient (multi-shard support)")
     print("\nNot Yet Available (Phase 3+):")
-    print("  - Slash commands")
-    print("  - Multi-shard support")
-    print("  - Voice connections")
-    print("  - Cogs system")
+    print("  - Voice connections (DAVE protocol)")
+    print("  - Advanced performance optimizations")
     print("=" * 60 + "\n")
     
     try:

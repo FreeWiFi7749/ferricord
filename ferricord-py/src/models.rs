@@ -2,8 +2,12 @@
 //!
 //! This module provides Python-accessible wrappers for Discord models.
 
+use ferricord_model::interaction::{
+    ApplicationCommandInteractionDataOption, Interaction, InteractionData, InteractionType,
+};
 use ferricord_model::{Channel, Guild, Member, Message, Role, User};
 use pyo3::prelude::*;
+use pyo3::IntoPyObject;
 
 /// Python wrapper for User.
 #[pyclass(name = "User")]
@@ -568,5 +572,351 @@ impl PyRole {
 
     pub fn inner(&self) -> &Role {
         &self.inner
+    }
+}
+
+/// Python wrapper for Interaction.
+#[pyclass(name = "Interaction")]
+#[derive(Clone, Debug)]
+pub struct PyInteraction {
+    inner: Interaction,
+}
+
+#[pymethods]
+impl PyInteraction {
+    /// The interaction's ID.
+    #[getter]
+    fn id(&self) -> u64 {
+        self.inner.id.get()
+    }
+
+    /// The application ID this interaction is for.
+    #[getter]
+    fn application_id(&self) -> u64 {
+        self.inner.application_id.get()
+    }
+
+    /// The type of interaction.
+    #[getter]
+    fn r#type(&self) -> u8 {
+        self.inner.kind as u8
+    }
+
+    /// The guild ID where the interaction was sent.
+    #[getter]
+    fn guild_id(&self) -> Option<u64> {
+        self.inner.guild_id.map(|id| id.get())
+    }
+
+    /// The channel ID where the interaction was sent.
+    #[getter]
+    fn channel_id(&self) -> Option<u64> {
+        self.inner.channel_id.map(|id| id.get())
+    }
+
+    /// The user who invoked the interaction.
+    #[getter]
+    fn user(&self) -> Option<PyUser> {
+        self.inner.user().cloned().map(PyUser::new)
+    }
+
+    /// The member who invoked the interaction (if in a guild).
+    #[getter]
+    fn member(&self) -> Option<PyMember> {
+        self.inner.member.clone().map(PyMember::new)
+    }
+
+    /// The interaction token for responding.
+    #[getter]
+    fn token(&self) -> &str {
+        &self.inner.token
+    }
+
+    /// The interaction data (command name, options, etc.).
+    #[getter]
+    fn data(&self) -> Option<PyInteractionData> {
+        self.inner.data.clone().map(PyInteractionData::new)
+    }
+
+    /// The locale of the invoking user.
+    #[getter]
+    fn locale(&self) -> Option<&str> {
+        self.inner.locale.as_deref()
+    }
+
+    /// The guild's preferred locale.
+    #[getter]
+    fn guild_locale(&self) -> Option<&str> {
+        self.inner.guild_locale.as_deref()
+    }
+
+    /// Whether this interaction was invoked in a guild.
+    fn is_guild(&self) -> bool {
+        self.inner.is_guild()
+    }
+
+    /// Whether this interaction was invoked in a DM.
+    fn is_dm(&self) -> bool {
+        self.inner.is_dm()
+    }
+
+    /// Whether this is a slash command interaction.
+    fn is_command(&self) -> bool {
+        self.inner.kind == InteractionType::ApplicationCommand
+    }
+
+    /// Whether this is a component interaction (button, select menu).
+    fn is_component(&self) -> bool {
+        self.inner.kind == InteractionType::MessageComponent
+    }
+
+    /// Whether this is a modal submit interaction.
+    fn is_modal_submit(&self) -> bool {
+        self.inner.kind == InteractionType::ModalSubmit
+    }
+
+    /// Whether this is an autocomplete interaction.
+    fn is_autocomplete(&self) -> bool {
+        self.inner.kind == InteractionType::ApplicationCommandAutocomplete
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "<Interaction id={} type={}>",
+            self.inner.id, self.inner.kind as u8
+        )
+    }
+}
+
+impl PyInteraction {
+    pub fn new(interaction: Interaction) -> Self {
+        Self { inner: interaction }
+    }
+
+    pub fn inner(&self) -> &Interaction {
+        &self.inner
+    }
+}
+
+/// Python wrapper for InteractionData.
+#[pyclass(name = "InteractionData")]
+#[derive(Clone, Debug)]
+pub struct PyInteractionData {
+    inner: InteractionData,
+}
+
+#[pymethods]
+impl PyInteractionData {
+    /// The command ID (for application commands).
+    #[getter]
+    fn id(&self) -> Option<u64> {
+        self.inner.id.map(|id| id.get())
+    }
+
+    /// The command name.
+    #[getter]
+    fn name(&self) -> Option<&str> {
+        self.inner.name.as_deref()
+    }
+
+    /// The custom ID (for components and modals).
+    #[getter]
+    fn custom_id(&self) -> Option<&str> {
+        self.inner.custom_id.as_deref()
+    }
+
+    /// The component type (for component interactions).
+    #[getter]
+    fn component_type(&self) -> Option<u8> {
+        self.inner.component_type
+    }
+
+    /// The values selected (for select menus).
+    #[getter]
+    fn values(&self) -> Vec<String> {
+        self.inner.values.clone()
+    }
+
+    /// The command options.
+    #[getter]
+    fn options(&self) -> Vec<PyInteractionOption> {
+        self.inner
+            .options
+            .iter()
+            .map(|o| PyInteractionOption::new(o.clone()))
+            .collect()
+    }
+
+    /// Get an option by name.
+    fn get_option(&self, name: &str) -> Option<PyInteractionOption> {
+        self.inner
+            .options
+            .iter()
+            .find(|o| o.name == name)
+            .cloned()
+            .map(PyInteractionOption::new)
+    }
+
+    /// Get a string option value by name.
+    fn get_string(&self, name: &str) -> Option<String> {
+        self.inner
+            .options
+            .iter()
+            .find(|o| o.name == name)
+            .and_then(|o| {
+                o.value
+                    .as_ref()
+                    .and_then(|v| v.as_str().map(|s| s.to_string()))
+            })
+    }
+
+    /// Get an integer option value by name.
+    fn get_integer(&self, name: &str) -> Option<i64> {
+        self.inner
+            .options
+            .iter()
+            .find(|o| o.name == name)
+            .and_then(|o| o.value.as_ref().and_then(|v| v.as_i64()))
+    }
+
+    /// Get a number option value by name.
+    fn get_number(&self, name: &str) -> Option<f64> {
+        self.inner
+            .options
+            .iter()
+            .find(|o| o.name == name)
+            .and_then(|o| o.value.as_ref().and_then(|v| v.as_f64()))
+    }
+
+    /// Get a boolean option value by name.
+    fn get_boolean(&self, name: &str) -> Option<bool> {
+        self.inner
+            .options
+            .iter()
+            .find(|o| o.name == name)
+            .and_then(|o| o.value.as_ref().and_then(|v| v.as_bool()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "<InteractionData name='{}'>",
+            self.inner.name.as_deref().unwrap_or("Unknown")
+        )
+    }
+}
+
+impl PyInteractionData {
+    pub fn new(data: InteractionData) -> Self {
+        Self { inner: data }
+    }
+}
+
+/// Python wrapper for ApplicationCommandInteractionDataOption.
+#[pyclass(name = "InteractionOption")]
+#[derive(Clone, Debug)]
+pub struct PyInteractionOption {
+    inner: ApplicationCommandInteractionDataOption,
+}
+
+#[pymethods]
+impl PyInteractionOption {
+    /// The option name.
+    #[getter]
+    fn name(&self) -> &str {
+        &self.inner.name
+    }
+
+    /// The option type.
+    #[getter]
+    fn r#type(&self) -> u8 {
+        self.inner.kind as u8
+    }
+
+    /// The option value as a Python object.
+    #[getter]
+    fn value(&self) -> Option<PyObject> {
+        Python::with_gil(|py| {
+            self.inner.value.as_ref().and_then(|v| {
+                if let Some(s) = v.as_str() {
+                    s.into_pyobject(py).ok().map(|o| o.into_any().unbind())
+                } else if let Some(i) = v.as_i64() {
+                    i.into_pyobject(py).ok().map(|o| o.into_any().unbind())
+                } else if let Some(f) = v.as_f64() {
+                    f.into_pyobject(py).ok().map(|o| o.into_any().unbind())
+                } else if let Some(b) = v.as_bool() {
+                    // For bool, into_pyobject returns Result<Borrowed, Infallible>
+                    // Use ok() to unwrap the infallible result, then convert
+                    b.into_pyobject(py)
+                        .ok()
+                        .map(|o| o.as_any().clone().unbind())
+                } else {
+                    v.to_string()
+                        .into_pyobject(py)
+                        .ok()
+                        .map(|o| o.into_any().unbind())
+                }
+            })
+        })
+    }
+
+    /// Whether this option is focused (for autocomplete).
+    #[getter]
+    fn focused(&self) -> bool {
+        self.inner.focused
+    }
+
+    /// Nested options (for subcommands).
+    #[getter]
+    fn options(&self) -> Vec<PyInteractionOption> {
+        self.inner
+            .options
+            .iter()
+            .map(|o| PyInteractionOption::new(o.clone()))
+            .collect()
+    }
+
+    fn __repr__(&self) -> String {
+        format!("<InteractionOption name='{}'>", self.inner.name)
+    }
+}
+
+impl PyInteractionOption {
+    pub fn new(option: ApplicationCommandInteractionDataOption) -> Self {
+        Self { inner: option }
+    }
+}
+
+/// Python wrapper for InteractionResponse builder.
+#[pyclass(name = "InteractionResponse")]
+#[derive(Clone, Debug, Default)]
+pub struct PyInteractionResponse {
+    pub content: Option<String>,
+    pub ephemeral: bool,
+}
+
+#[pymethods]
+impl PyInteractionResponse {
+    #[new]
+    #[pyo3(signature = (content=None, ephemeral=false))]
+    fn new(content: Option<String>, ephemeral: bool) -> Self {
+        Self { content, ephemeral }
+    }
+
+    /// Set the response content.
+    fn set_content(&mut self, content: String) {
+        self.content = Some(content);
+    }
+
+    /// Set whether the response is ephemeral.
+    fn set_ephemeral(&mut self, ephemeral: bool) {
+        self.ephemeral = ephemeral;
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "<InteractionResponse content='{}' ephemeral={}>",
+            self.content.as_deref().unwrap_or(""),
+            self.ephemeral
+        )
     }
 }

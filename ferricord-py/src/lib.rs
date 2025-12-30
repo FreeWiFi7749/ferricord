@@ -41,6 +41,7 @@ fn ferricord(m: &Bound<'_, PyModule>) -> PyResult<()> {
     init_logging();
 
     m.add_class::<client::Client>()?;
+    m.add_class::<client::AutoShardedClient>()?;
     m.add_class::<intents::Intents>()?;
     m.add_class::<models::PyUser>()?;
     m.add_class::<models::PyMessage>()?;
@@ -48,6 +49,10 @@ fn ferricord(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<models::PyChannel>()?;
     m.add_class::<models::PyMember>()?;
     m.add_class::<models::PyRole>()?;
+    m.add_class::<models::PyInteraction>()?;
+    m.add_class::<models::PyInteractionData>()?;
+    m.add_class::<models::PyInteractionOption>()?;
+    m.add_class::<models::PyInteractionResponse>()?;
 
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
 

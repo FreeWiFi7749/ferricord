@@ -435,6 +435,203 @@ impl HttpClient {
         self.request_with_body(routes::users::create_dm(), Some(&body))
             .await
     }
+
+    // ========== Interactions ==========
+
+    /// Create an interaction response.
+    pub async fn create_interaction_response(
+        &self,
+        interaction_id: &str,
+        interaction_token: &str,
+        response: &ferricord_model::interaction::InteractionResponse,
+    ) -> Result<()> {
+        self.request_with_body(
+            routes::interactions::create_response(interaction_id, interaction_token),
+            Some(response),
+        )
+        .await
+    }
+
+    /// Get the original interaction response.
+    pub async fn get_original_interaction_response(
+        &self,
+        application_id: UserId,
+        interaction_token: &str,
+    ) -> Result<Message> {
+        self.request(routes::interactions::get_original_response(
+            application_id,
+            interaction_token,
+        ))
+        .await
+    }
+
+    /// Edit the original interaction response.
+    pub async fn edit_original_interaction_response(
+        &self,
+        application_id: UserId,
+        interaction_token: &str,
+        content: Option<String>,
+        embeds: Option<Vec<ferricord_model::Embed>>,
+        components: Option<Vec<ferricord_model::message::Component>>,
+    ) -> Result<Message> {
+        #[derive(Serialize)]
+        struct EditResponse {
+            #[serde(skip_serializing_if = "Option::is_none")]
+            content: Option<String>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            embeds: Option<Vec<ferricord_model::Embed>>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            components: Option<Vec<ferricord_model::message::Component>>,
+        }
+
+        let body = EditResponse {
+            content,
+            embeds,
+            components,
+        };
+
+        self.request_with_body(
+            routes::interactions::edit_original_response(application_id, interaction_token),
+            Some(&body),
+        )
+        .await
+    }
+
+    /// Delete the original interaction response.
+    pub async fn delete_original_interaction_response(
+        &self,
+        application_id: UserId,
+        interaction_token: &str,
+    ) -> Result<()> {
+        self.request(routes::interactions::delete_original_response(
+            application_id,
+            interaction_token,
+        ))
+        .await
+    }
+
+    // ========== Application Commands ==========
+
+    /// Get global application commands.
+    pub async fn get_global_commands(
+        &self,
+        application_id: UserId,
+    ) -> Result<Vec<ferricord_model::interaction::ApplicationCommand>> {
+        self.request(routes::commands::get_global(application_id))
+            .await
+    }
+
+    /// Create a global application command.
+    pub async fn create_global_command(
+        &self,
+        application_id: UserId,
+        command: &CreateApplicationCommand,
+    ) -> Result<ferricord_model::interaction::ApplicationCommand> {
+        self.request_with_body(
+            routes::commands::create_global(application_id),
+            Some(command),
+        )
+        .await
+    }
+
+    /// Bulk overwrite global application commands.
+    pub async fn bulk_overwrite_global_commands(
+        &self,
+        application_id: UserId,
+        commands: &[CreateApplicationCommand],
+    ) -> Result<Vec<ferricord_model::interaction::ApplicationCommand>> {
+        self.request_with_body(
+            routes::commands::bulk_overwrite_global(application_id),
+            Some(&commands),
+        )
+        .await
+    }
+
+    /// Get guild application commands.
+    pub async fn get_guild_commands(
+        &self,
+        application_id: UserId,
+        guild_id: GuildId,
+    ) -> Result<Vec<ferricord_model::interaction::ApplicationCommand>> {
+        self.request(routes::commands::get_guild(application_id, guild_id))
+            .await
+    }
+
+    /// Create a guild application command.
+    pub async fn create_guild_command(
+        &self,
+        application_id: UserId,
+        guild_id: GuildId,
+        command: &CreateApplicationCommand,
+    ) -> Result<ferricord_model::interaction::ApplicationCommand> {
+        self.request_with_body(
+            routes::commands::create_guild(application_id, guild_id),
+            Some(command),
+        )
+        .await
+    }
+
+    /// Bulk overwrite guild application commands.
+    pub async fn bulk_overwrite_guild_commands(
+        &self,
+        application_id: UserId,
+        guild_id: GuildId,
+        commands: &[CreateApplicationCommand],
+    ) -> Result<Vec<ferricord_model::interaction::ApplicationCommand>> {
+        self.request_with_body(
+            routes::commands::bulk_overwrite_guild(application_id, guild_id),
+            Some(&commands),
+        )
+        .await
+    }
+}
+
+/// Request body for creating an application command.
+#[derive(Clone, Debug, Serialize)]
+pub struct CreateApplicationCommand {
+    /// Name of command, 1-32 characters.
+    pub name: String,
+    /// Description for CHAT_INPUT commands, 1-100 characters.
+    pub description: String,
+    /// Type of command.
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+    pub kind: Option<ferricord_model::interaction::ApplicationCommandType>,
+    /// Parameters for the command, max of 25.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub options: Vec<CreateApplicationCommandOption>,
+    /// Set of permissions represented as a bit set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_member_permissions: Option<String>,
+    /// Indicates whether the command is available in DMs with the app.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dm_permission: Option<bool>,
+    /// Indicates whether the command is age-restricted.
+    #[serde(default)]
+    pub nsfw: bool,
+}
+
+/// Request body for creating an application command option.
+#[derive(Clone, Debug, Serialize)]
+pub struct CreateApplicationCommandOption {
+    /// Type of option.
+    #[serde(rename = "type")]
+    pub kind: ferricord_model::interaction::ApplicationCommandOptionType,
+    /// 1-32 character name.
+    pub name: String,
+    /// 1-100 character description.
+    pub description: String,
+    /// If the parameter is required or optional.
+    #[serde(default)]
+    pub required: bool,
+    /// Choices for STRING, INTEGER, and NUMBER types.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub choices: Vec<ferricord_model::interaction::ApplicationCommandOptionChoice>,
+    /// If the option is a subcommand or subcommand group type, these nested options.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub options: Vec<CreateApplicationCommandOption>,
+    /// If autocomplete interactions are enabled for this option.
+    #[serde(default)]
+    pub autocomplete: bool,
 }
 
 impl std::fmt::Debug for HttpClient {
