@@ -179,9 +179,16 @@ impl Client {
 
                 // Pin the shard handle so we can poll it in the select
                 let mut shard_handle = std::pin::pin!(shard_handle);
+                let mut got_sigint = false;
 
                 while *running.read().await {
                     tokio::select! {
+                        // Handle Ctrl+C (SIGINT)
+                        _ = tokio::signal::ctrl_c() => {
+                            info!("Received Ctrl+C, shutting down...");
+                            got_sigint = true;
+                            break;
+                        }
                         // Wait for shard task to complete (error or normal disconnect)
                         result = &mut shard_handle => {
                             match result {
@@ -201,12 +208,23 @@ impl Client {
                 if !shard_handle.is_finished() {
                     shard_handle.abort();
                 }
+
+                // Store whether we got SIGINT so we can raise KeyboardInterrupt
+                if got_sigint {
+                    *error_holder_clone.write().await = Some("KeyboardInterrupt".to_string());
+                }
             });
         });
 
         if let Some(err) = pyo3_async_runtimes::tokio::get_runtime()
             .block_on(async { error_holder.read().await.clone() })
         {
+            // Raise KeyboardInterrupt for Ctrl+C, RuntimeError for other errors
+            if err == "KeyboardInterrupt" {
+                return Err(pyo3::exceptions::PyKeyboardInterrupt::new_err(
+                    "Received Ctrl+C",
+                ));
+            }
             return Err(pyo3::exceptions::PyRuntimeError::new_err(err));
         }
 
