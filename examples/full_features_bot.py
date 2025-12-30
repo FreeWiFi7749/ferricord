@@ -43,7 +43,19 @@ Usage:
 
 import os
 import asyncio
+import json
+import urllib.request
+import urllib.error
 from datetime import datetime
+
+# Try to load dotenv if available
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    print("[Config] Loaded .env file")
+except ImportError:
+    print("[Config] python-dotenv not installed, using environment variables only")
+    print("[Config] Install with: pip install python-dotenv")
 
 # Import Ferricord components
 from ferricord import Client, Intents, AutoShardedClient
@@ -53,14 +65,114 @@ from ferricord import Client, Intents, AutoShardedClient
 # =============================================================================
 
 def get_token() -> str:
-    """Get the bot token from environment variable."""
+    """Get the bot token from environment variable or .env file."""
     token = os.environ.get("DISCORD_TOKEN")
     if not token:
         raise ValueError(
             "DISCORD_TOKEN environment variable is not set.\n"
-            "Please set it with: export DISCORD_TOKEN='your_bot_token'"
+            "Please set it in your .env file or with: export DISCORD_TOKEN='your_bot_token'"
         )
     return token
+
+
+def get_application_id() -> str:
+    """Get the application ID from environment variable or .env file."""
+    app_id = os.environ.get("DISCORD_APPLICATION_ID")
+    if not app_id:
+        raise ValueError(
+            "DISCORD_APPLICATION_ID environment variable is not set.\n"
+            "Please set it in your .env file or with: export DISCORD_APPLICATION_ID='your_app_id'"
+        )
+    return app_id
+
+
+# =============================================================================
+# Slash Command Registration
+# =============================================================================
+
+def register_slash_commands(token: str, application_id: str, guild_id: str = None):
+    """
+    Register slash commands with Discord API.
+    
+    Args:
+        token: Bot token
+        application_id: Application ID from Discord Developer Portal
+        guild_id: Optional guild ID for guild-specific commands (faster updates)
+                  If None, registers global commands (can take up to 1 hour to propagate)
+    
+    Note: Guild commands update instantly, global commands can take up to 1 hour.
+    For development, use guild_id for faster iteration.
+    """
+    commands = [
+        {
+            "name": "ping",
+            "description": "Check if the bot is responsive",
+            "type": 1  # CHAT_INPUT
+        },
+        {
+            "name": "info",
+            "description": "Get bot information",
+            "type": 1
+        },
+        {
+            "name": "greet",
+            "description": "Greet a user",
+            "type": 1,
+            "options": [
+                {
+                    "name": "user",
+                    "description": "The user to greet",
+                    "type": 6,  # USER type
+                    "required": False
+                }
+            ]
+        },
+        {
+            "name": "defer_example",
+            "description": "Example of deferred response",
+            "type": 1
+        },
+        {
+            "name": "metrics",
+            "description": "Get bot metrics and statistics",
+            "type": 1
+        }
+    ]
+    
+    # Determine URL based on guild_id
+    if guild_id:
+        url = f"https://discord.com/api/v10/applications/{application_id}/guilds/{guild_id}/commands"
+        print(f"[Slash Commands] Registering {len(commands)} guild commands to guild {guild_id}...")
+    else:
+        url = f"https://discord.com/api/v10/applications/{application_id}/commands"
+        print(f"[Slash Commands] Registering {len(commands)} global commands...")
+        print("[Slash Commands] Note: Global commands can take up to 1 hour to propagate")
+    
+    # Register commands using bulk overwrite
+    data = json.dumps(commands).encode('utf-8')
+    
+    req = urllib.request.Request(
+        url,
+        data=data,
+        method='PUT',
+        headers={
+            'Authorization': f'Bot {token}',
+            'Content-Type': 'application/json'
+        }
+    )
+    
+    try:
+        with urllib.request.urlopen(req) as response:
+            result = json.loads(response.read().decode('utf-8'))
+            print(f"[Slash Commands] Successfully registered {len(result)} commands:")
+            for cmd in result:
+                print(f"  - /{cmd['name']}: {cmd['description']}")
+            return result
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode('utf-8')
+        print(f"[Slash Commands] Error registering commands: {e.code} {e.reason}")
+        print(f"[Slash Commands] Response: {error_body}")
+        return None
 
 # =============================================================================
 # Intents Configuration
@@ -293,6 +405,33 @@ async def slash_defer_example(interaction):
     await client.edit_interaction_response(
         interaction_token=interaction.token,
         content="Done! This response was deferred while processing."
+    )
+
+
+@client.slash_command(name="metrics", description="Get bot metrics and statistics")
+async def slash_metrics(interaction):
+    """Get bot metrics and statistics via slash command."""
+    print(f"[Slash Command] /metrics triggered")
+    
+    metrics = client.get_metrics()
+    
+    content = f"""**Bot Metrics**
+Guilds: {metrics.get('guilds', 0)}
+Channels: {metrics.get('channels', 0)}
+Users: {metrics.get('users', 0)}
+Messages: {metrics.get('messages', 0)}
+Members: {metrics.get('members', 0)}
+Event Handlers: {metrics.get('event_handlers', 0)}
+Slash Commands: {metrics.get('slash_commands', 0)}
+Component Handlers: {metrics.get('component_handlers', 0)}
+Modal Handlers: {metrics.get('modal_handlers', 0)}
+Running: {metrics.get('running', False)}"""
+    
+    await client.respond_to_interaction(
+        interaction_id=interaction.id,
+        interaction_token=interaction.token,
+        content=content,
+        ephemeral=True
     )
 
 
@@ -954,7 +1093,18 @@ def main():
     
     try:
         token = get_token()
-        print("[Starting] Connecting to Discord...")
+        
+        # Register slash commands with Discord API
+        # Set DISCORD_APPLICATION_ID and optionally DISCORD_GUILD_ID in .env
+        try:
+            app_id = get_application_id()
+            guild_id = os.environ.get("DISCORD_GUILD_ID")  # Optional: for faster dev iteration
+            register_slash_commands(token, app_id, guild_id)
+        except ValueError as e:
+            print(f"[Slash Commands] Skipping registration: {e}")
+            print("[Slash Commands] Set DISCORD_APPLICATION_ID to enable slash command registration")
+        
+        print("\n[Starting] Connecting to Discord...")
         
         # Run the bot (blocking call)
         client.run(token)

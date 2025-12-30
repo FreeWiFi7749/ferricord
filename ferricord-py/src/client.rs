@@ -1079,10 +1079,11 @@ impl Client {
     /// Get client metrics and statistics.
     ///
     /// Returns a dictionary with various metrics about the client's operation.
+    /// Uses try_read() to avoid blocking, returns 0 if lock is unavailable.
     fn get_metrics(&self, py: Python<'_>) -> PyResult<PyObject> {
         let dict = pyo3::types::PyDict::new(py);
 
-        // Cache stats
+        // Cache stats (synchronous, always available)
         let stats = self.cache.stats();
         dict.set_item("guilds", stats.guilds)?;
         dict.set_item("channels", stats.channels)?;
@@ -1090,29 +1091,40 @@ impl Client {
         dict.set_item("messages", stats.messages)?;
         dict.set_item("members", stats.members)?;
 
-        // Event handler count
-        let handler_count = pyo3_async_runtimes::tokio::get_runtime()
-            .block_on(async { self.event_handlers.read().await.len() });
+        // Event handler count (non-blocking)
+        let handler_count = self
+            .event_handlers
+            .try_read()
+            .map(|guard| guard.len())
+            .unwrap_or(0);
         dict.set_item("event_handlers", handler_count)?;
 
-        // Slash command handler count
-        let slash_count = pyo3_async_runtimes::tokio::get_runtime()
-            .block_on(async { self.slash_command_handlers.read().await.len() });
+        // Slash command handler count (non-blocking)
+        let slash_count = self
+            .slash_command_handlers
+            .try_read()
+            .map(|guard| guard.len())
+            .unwrap_or(0);
         dict.set_item("slash_commands", slash_count)?;
 
-        // Component handler count
-        let component_count = pyo3_async_runtimes::tokio::get_runtime()
-            .block_on(async { self.component_handlers.read().await.len() });
+        // Component handler count (non-blocking)
+        let component_count = self
+            .component_handlers
+            .try_read()
+            .map(|guard| guard.len())
+            .unwrap_or(0);
         dict.set_item("component_handlers", component_count)?;
 
-        // Modal handler count
-        let modal_count = pyo3_async_runtimes::tokio::get_runtime()
-            .block_on(async { self.modal_handlers.read().await.len() });
+        // Modal handler count (non-blocking)
+        let modal_count = self
+            .modal_handlers
+            .try_read()
+            .map(|guard| guard.len())
+            .unwrap_or(0);
         dict.set_item("modal_handlers", modal_count)?;
 
-        // Running status
-        let running = pyo3_async_runtimes::tokio::get_runtime()
-            .block_on(async { *self.running.read().await });
+        // Running status (non-blocking)
+        let running = self.running.try_read().map(|guard| *guard).unwrap_or(false);
         dict.set_item("running", running)?;
 
         Ok(dict.into())
@@ -1508,10 +1520,11 @@ impl AutoShardedClient {
     }
 
     /// Get client metrics and statistics.
+    /// Uses try_read() to avoid blocking, returns 0 if lock is unavailable.
     fn get_metrics(&self, py: Python<'_>) -> PyResult<PyObject> {
         let dict = pyo3::types::PyDict::new(py);
 
-        // Cache stats
+        // Cache stats (synchronous, always available)
         let stats = self.cache.stats();
         dict.set_item("guilds", stats.guilds)?;
         dict.set_item("channels", stats.channels)?;
@@ -1519,26 +1532,26 @@ impl AutoShardedClient {
         dict.set_item("messages", stats.messages)?;
         dict.set_item("members", stats.members)?;
 
-        // Shard info
-        let shard_count = pyo3_async_runtimes::tokio::get_runtime()
-            .block_on(async { *self.shard_count.read().await });
+        // Shard info (non-blocking)
+        let shard_count = self.shard_count.try_read().map(|guard| *guard).unwrap_or(0);
         dict.set_item("shard_count", shard_count)?;
 
-        let connected = pyo3_async_runtimes::tokio::get_runtime()
-            .block_on(async { self.connected_shards.read().await.len() });
+        let connected = self
+            .connected_shards
+            .try_read()
+            .map(|guard| guard.len())
+            .unwrap_or(0);
         dict.set_item("connected_shards", connected)?;
 
-        // Running status
-        let running = pyo3_async_runtimes::tokio::get_runtime()
-            .block_on(async { *self.running.read().await });
+        // Running status (non-blocking)
+        let running = self.running.try_read().map(|guard| *guard).unwrap_or(false);
         dict.set_item("running", running)?;
 
         Ok(dict.into())
     }
 
     fn __repr__(&self) -> String {
-        let shard_count = pyo3_async_runtimes::tokio::get_runtime()
-            .block_on(async { *self.shard_count.read().await });
+        let shard_count = self.shard_count.try_read().map(|guard| *guard).unwrap_or(0);
         format!(
             "<AutoShardedClient intents={} shards={}>",
             self.intents.inner().bits(),
