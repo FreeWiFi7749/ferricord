@@ -177,26 +177,22 @@ impl Client {
                     *shard_running.write().await = false;
                 });
 
+                // Pin the shard handle so we can poll it in the select
+                let mut shard_handle = std::pin::pin!(shard_handle);
+
                 while *running.read().await {
                     tokio::select! {
-                        biased;
-
-                        // Check if shard task has finished (error or disconnect)
-                        result = &mut std::pin::pin!(async { shard_handle.is_finished() }) => {
-                            if result {
-                                info!("Shard task finished, stopping event loop");
-                                break;
+                        // Wait for shard task to complete (error or normal disconnect)
+                        result = &mut shard_handle => {
+                            match result {
+                                Ok(()) => info!("Shard task completed normally"),
+                                Err(e) => error!("Shard task panicked: {:?}", e),
                             }
+                            break;
                         }
+                        // Process incoming events from the shard
                         Some(event) = event_rx.recv() => {
                             Self::handle_event(&event_handlers, &cache, event).await;
-                        }
-                        _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {
-                            // Check if shard has finished during sleep
-                            if shard_handle.is_finished() {
-                                info!("Shard task finished during sleep, stopping event loop");
-                                break;
-                            }
                         }
                     }
                 }
