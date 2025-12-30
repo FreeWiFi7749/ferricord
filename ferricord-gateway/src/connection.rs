@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use flate2::{Decompress, FlushDecompress};
+use flate2::{Decompress, FlushDecompress, Status};
 use futures::stream::{SplitSink, SplitStream};
 use futures::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
@@ -186,34 +186,69 @@ impl GatewayConnection {
                 if buffer.len() >= 4 && buffer[buffer.len() - 4..] == ZLIB_SUFFIX {
                     let mut decompressor = self.decompressor.lock().await;
 
-                    // Pre-allocate output buffer - Discord payloads typically decompress to ~10x size
-                    let mut output = Vec::with_capacity(buffer.len() * 10);
+                    // Decompress in a loop until all input is consumed
+                    // decompress_vec doesn't grow the output buffer, so we need to keep
+                    // calling it until Status::Ok or all input is consumed
+                    let mut output = Vec::new();
+                    let mut input_offset = 0;
 
-                    // Use decompress_vec with SyncFlush to decompress incrementally
-                    // This maintains the decompressor state (dictionary) across messages
-                    match decompressor.decompress_vec(&buffer, &mut output, FlushDecompress::Sync) {
-                        Ok(_status) => {
-                            // Clear input buffer but keep decompressor state
-                            buffer.clear();
+                    loop {
+                        // Reserve space for more output
+                        let additional_capacity =
+                            (buffer.len() - input_offset).saturating_mul(10).max(4096);
+                        output.reserve(additional_capacity);
 
-                            let decompressed = String::from_utf8(output).map_err(|e| {
-                                Error::websocket(format!(
-                                    "Invalid UTF-8 in decompressed data: {}",
+                        let before_in = decompressor.total_in();
+
+                        match decompressor.decompress_vec(
+                            &buffer[input_offset..],
+                            &mut output,
+                            FlushDecompress::Sync,
+                        ) {
+                            Ok(status) => {
+                                let consumed = (decompressor.total_in() - before_in) as usize;
+                                input_offset += consumed;
+
+                                // If we got Ok status and consumed all input, we're done
+                                if status == Status::Ok || input_offset >= buffer.len() {
+                                    break;
+                                }
+
+                                // If BufError, we need more output space - continue loop
+                                if status == Status::BufError {
+                                    continue;
+                                }
+
+                                // StreamEnd means the stream is complete
+                                if status == Status::StreamEnd {
+                                    break;
+                                }
+                            }
+                            Err(e) => {
+                                // On decompression error, reset both buffer and decompressor
+                                buffer.clear();
+                                decompressor.reset(true);
+                                return Err(Error::websocket(format!(
+                                    "Decompression failed: {}",
                                     e
-                                ))
-                            })?;
-
-                            trace!("Received binary (decompressed): {}", decompressed);
-                            let payload: GatewayPayload = serde_json::from_str(&decompressed)?;
-                            Ok(Some(payload))
-                        }
-                        Err(e) => {
-                            // On decompression error, reset both buffer and decompressor
-                            buffer.clear();
-                            decompressor.reset(true);
-                            Err(Error::websocket(format!("Decompression failed: {}", e)))
+                                )));
+                            }
                         }
                     }
+
+                    // Clear input buffer but keep decompressor state for next message
+                    buffer.clear();
+
+                    let decompressed = String::from_utf8(output).map_err(|e| {
+                        Error::websocket(format!("Invalid UTF-8 in decompressed data: {}", e))
+                    })?;
+
+                    trace!(
+                        "Received binary (decompressed {} bytes)",
+                        decompressed.len()
+                    );
+                    let payload: GatewayPayload = serde_json::from_str(&decompressed)?;
+                    Ok(Some(payload))
                 } else {
                     // Not a complete message yet, wait for more data
                     Ok(None)
