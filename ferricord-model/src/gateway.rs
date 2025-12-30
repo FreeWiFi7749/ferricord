@@ -764,7 +764,9 @@ pub struct GatewayPayload {
     /// Opcode for the payload.
     pub op: u8,
     /// Event data.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Note: We intentionally do NOT use skip_serializing_if here because
+    /// Discord requires the `d` field to be present (even as null) for heartbeats.
+    /// Sending `{"op":1}` instead of `{"op":1,"d":null}` causes error 4002.
     pub d: Option<serde_json::Value>,
     /// Sequence number, used for resuming sessions and heartbeats.
     #[serde(skip_serializing_if = "Option::is_none")]
