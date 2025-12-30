@@ -10,7 +10,26 @@ This example demonstrates ALL Phase 1 features of Ferricord:
 
 Note: Phase 1 is receive-only. Message sending will be available in Phase 2.
 
+IMPORTANT - Discord Developer Portal Setup:
+===========================================
+Before running this bot, you MUST enable privileged intents in the Discord Developer Portal:
+
+1. Go to https://discord.com/developers/applications
+2. Select your application
+3. Go to "Bot" in the left sidebar
+4. Scroll down to "Privileged Gateway Intents"
+5. Enable the following intents:
+   - "MESSAGE CONTENT INTENT" (required to read message content)
+   - "SERVER MEMBERS INTENT" (required for member join/remove events)
+   - "PRESENCE INTENT" (optional, for presence updates)
+6. Save changes
+
+If you don't enable these intents, the bot will disconnect immediately
+with error code 4014 (Disallowed intents).
+
 Usage:
+    # Enable Rust logging to see detailed connection info
+    export RUST_LOG=info
     export DISCORD_TOKEN="your_bot_token"
     python full_features_bot.py
 """

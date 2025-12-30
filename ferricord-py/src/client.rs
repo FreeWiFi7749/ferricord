@@ -159,22 +159,52 @@ impl Client {
 
                 let (event_tx, mut event_rx) = mpsc::unbounded_channel::<GatewayEvent>();
 
+                // Clone error_holder for the shard task
+                let shard_error_holder = error_holder_clone.clone();
+                let shard_running = running.clone();
+
                 let shard_handle = tokio::spawn(async move {
-                    if let Err(e) = shard.run(&gateway_info.url, event_tx).await {
-                        error!("Shard error: {}", e);
+                    match shard.run(&gateway_info.url, event_tx).await {
+                        Ok(()) => {
+                            info!("Shard disconnected normally");
+                        }
+                        Err(e) => {
+                            error!("Shard error: {}", e);
+                            *shard_error_holder.write().await = Some(format!("Shard error: {}", e));
+                        }
                     }
+                    // Signal that we should stop when shard exits
+                    *shard_running.write().await = false;
                 });
 
                 while *running.read().await {
                     tokio::select! {
+                        biased;
+                        
+                        // Check if shard task has finished (error or disconnect)
+                        result = &mut std::pin::pin!(async { shard_handle.is_finished() }) => {
+                            if result {
+                                info!("Shard task finished, stopping event loop");
+                                break;
+                            }
+                        }
                         Some(event) = event_rx.recv() => {
                             Self::handle_event(&event_handlers, &cache, event).await;
                         }
-                        _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {}
+                        _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {
+                            // Check if shard has finished during sleep
+                            if shard_handle.is_finished() {
+                                info!("Shard task finished during sleep, stopping event loop");
+                                break;
+                            }
+                        }
                     }
                 }
 
-                shard_handle.abort();
+                // Clean up
+                if !shard_handle.is_finished() {
+                    shard_handle.abort();
+                }
             });
         });
 

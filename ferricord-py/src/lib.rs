@@ -7,8 +7,30 @@ mod intents;
 mod models;
 mod types;
 
+use std::sync::Once;
+
 use pyo3::prelude::*;
 use pyo3::types::PyModule;
+use tracing_subscriber::EnvFilter;
+
+static INIT_LOGGING: Once = Once::new();
+
+/// Initialize the tracing subscriber for logging.
+/// This is called once when the module is first imported.
+fn init_logging() {
+    INIT_LOGGING.call_once(|| {
+        let filter = EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| EnvFilter::new("warn"));
+        
+        tracing_subscriber::fmt()
+            .with_env_filter(filter)
+            .with_target(true)
+            .with_thread_ids(false)
+            .with_file(false)
+            .with_line_number(false)
+            .init();
+    });
+}
 
 /// Ferricord - A high-performance Discord API wrapper for Python.
 ///
@@ -16,6 +38,9 @@ use pyo3::types::PyModule;
 /// offering a discord.py-compatible API with Rust performance.
 #[pymodule]
 fn ferricord(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // Initialize logging on module import
+    init_logging();
+
     m.add_class::<client::Client>()?;
     m.add_class::<intents::Intents>()?;
     m.add_class::<models::PyUser>()?;
