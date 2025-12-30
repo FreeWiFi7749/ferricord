@@ -180,7 +180,7 @@ impl Client {
                 while *running.read().await {
                     tokio::select! {
                         biased;
-                        
+
                         // Check if shard task has finished (error or disconnect)
                         result = &mut std::pin::pin!(async { shard_handle.is_finished() }) => {
                             if result {
